@@ -1,4 +1,4 @@
-package strukture
+package writeaheadlog
 
 import (
 	hashfunc "NASP_projekat2023/utils"
