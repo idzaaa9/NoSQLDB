@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
+	fp "path/filepath"
 )
 
 /* TODO:
@@ -30,85 +29,54 @@ import (
 
 type WriteAheadLog struct {
 	CurrentFile    *os.File
-	Index          int // last(current) wal segment
-	First          int // first wal segment
-	SegmentSize    int // segment size in bytes
-	Buffer         WALBuffer
-	BytesRemaining int    // remaining bytes from the last segment
+	Index          int    // last(current) wal segment
+	First          int    // first wal segment
+	SegmentSize    int    // segment size in bytes
+	Buffer         []byte // buffer for the entries
+	BytesRemaining int    // remaining bytes in the current segment
 	Path           string // contains path to the WAL folder
-}
-
-/*
-this function will go through the folder with the WAL data, and return the
-largest value of a segment
-ALL OF THE WAL FILE NAMES MUST BE IN THE FORMAT "wal_00001.log" !!!!!!!!!!
-*/
-func ScanWALFolder(path string) (int, error) {
-	files, err := os.ReadDir(path)
-	if err != nil {
-		return -1, err
-	}
-
-	// this regex returns all of the files which match our format
-	re := regexp.MustCompile(`^wal_(\d{5})\.log$`)
-
-	maxIndex := 0
-	minIndex := 999999999
-
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-		filename := file.Name()
-
-		// Match the filename against the regex pattern
-		matches := re.FindStringSubmatch(filename)
-
-		if len(matches) <= 1 {
-			continue
-		}
-
-		indexStr := matches[1]
-		// Convert the index to an integer
-		index, err := strconv.Atoi(indexStr)
-		if err != nil {
-			return 0, err
-		}
-
-		// Update the maximum index found
-		if index > maxIndex {
-			maxIndex = index
-		} else if index < minIndex {
-			minIndex = index
-		}
-	}
-
-	return maxIndex, nil
-}
-
-// creates the work directory for the WAL if it doesn't exist
-func createWorkDir(filepath string) error {
-	_, err := os.Stat(filepath)
-	if os.IsNotExist(err) {
-		err = os.MkdirAll(filepath, 0755)
-	}
-	return err
 }
 
 func NewWriteAheadLog(filepath string, segmentSize int) (*WriteAheadLog, error) {
 	err := createWorkDir(filepath)
-	index, err := ScanWALFolder(filepath)
+	maxIndex, minIndex, err := ScanWALFolder(filepath)
 
 	if err != nil {
 		return nil, errors.New("error while reading the wal folder")
 	}
 
+	lastSegment := fmt.Sprintf("wal_%05d.log", maxIndex)
+	lastSegmentPath := fp.Join(filepath, lastSegment)
+
+	file := new(os.File)
+	bytesRemaining := segmentSize
+
+	// if the last segment is empty, we don't need to create a new one
+	stat, err := os.Stat(lastSegmentPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			file, err = os.Create(lastSegmentPath)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	} else if stat.Size() < int64(segmentSize) {
+		file, err = os.OpenFile(lastSegmentPath, os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, err
+		}
+		bytesRemaining = segmentSize - int(stat.Size())
+	}
+
 	return &WriteAheadLog{
-		CurrentFile:    nil,
-		Index:          index,
+		CurrentFile:    file,
+		Index:          maxIndex,
+		First:          minIndex,
 		SegmentSize:    segmentSize,
-		Buffer:         *NewWALBuffer(segmentSize),
-		BytesRemaining: segmentSize,
+		Buffer:         make([]byte, 0),
+		BytesRemaining: bytesRemaining,
 		Path:           filepath,
 	}, nil
 }
@@ -124,65 +92,87 @@ func (wal *WriteAheadLog) createNewSegment() error {
 		return err
 	}
 	wal.CurrentFile = file
+	wal.BytesRemaining = wal.SegmentSize
 	return nil
 }
 
 // writes the current state of the buffer to the disk
 func (wal *WriteAheadLog) dump() error {
 	if wal.CurrentFile == nil {
-		wal.Index++
-		segmentName := fmt.Sprintf("wal_%05d.log", wal.Index)
-		segmentPath := filepath.Join(wal.Path, segmentName)
-
-		file, err := os.Create(segmentPath)
-		if err != nil {
-			return err
-		}
-		wal.CurrentFile = file
+		wal.createNewSegment()
 	}
 
-	for i := 0; i < len(wal.Buffer.Data); i++ {
-		entry := wal.Buffer.Data[i]
-
-		serializedEntry := entry.Serialize()
-
-		if wal.BytesRemaining >= entry.Size {
-			if _, err := wal.CurrentFile.Write(serializedEntry); err != nil {
-				return err
-			}
-			wal.BytesRemaining -= entry.Size
-			continue
-		}
-
-		// write as many bytes as we can fit
-		bytesWritten, err := wal.CurrentFile.Write(serializedEntry[:wal.BytesRemaining])
-		if err != nil {
+	if len(wal.Buffer) <= wal.BytesRemaining {
+		if _, err := wal.CurrentFile.Write(wal.Buffer); err != nil {
 			return err
 		}
+		wal.BytesRemaining -= len(wal.Buffer)
+		wal.Buffer = make([]byte, 0)
+		fmt.Println("written the whole buffer")
+		return nil
+	}
 
-		// close the current file
-		if err := wal.CurrentFile.Close(); err != nil {
-			return err
-		}
+	// write as many bytes as we can fit
+	if _, err := wal.CurrentFile.Write(wal.Buffer[:wal.BytesRemaining]); err != nil {
+		return err
+	}
 
+	bytesWritten := wal.BytesRemaining
+	bytesToWrite := len(wal.Buffer) - wal.BytesRemaining
+
+	fmt.Println("dumped ", bytesWritten, " bytes to the current segment")
+	fmt.Println("remaining: ", wal.BytesRemaining, " bytes")
+
+	// close the current file
+	if err := wal.CurrentFile.Close(); err != nil {
+		return err
+	}
+	fmt.Println("segment closed")
+
+	cycles := bytesToWrite / wal.SegmentSize
+
+	// this loop is used in case we need to write more than one segment
+	for i := 0; i < cycles; i++ {
 		// create a new segment
 		if err := wal.createNewSegment(); err != nil {
 			return err
 		}
 
-		// write the remaining bytes
-		if _, err := wal.CurrentFile.Write(serializedEntry[entry.Size-bytesWritten:]); err != nil {
+		// write the whole segments
+		if _, err := wal.CurrentFile.Write(wal.Buffer[bytesWritten : bytesWritten+wal.SegmentSize]); err != nil {
 			return err
 		}
-		wal.BytesRemaining = wal.SegmentSize - (entry.Size - bytesWritten)
+
+		fmt.Println("dumped whole segment")
+
+		bytesWritten += wal.SegmentSize
+
+		if err := wal.CurrentFile.Close(); err != nil {
+			return err
+		}
+		fmt.Println("segment closed")
 	}
 
-	wal.Buffer = *NewWALBuffer(wal.SegmentSize)
+	// write the remaining bytes
+	if err := wal.createNewSegment(); err != nil {
+		return err
+	}
+
+	if _, err := wal.CurrentFile.Write(wal.Buffer[bytesWritten:]); err != nil {
+		return err
+	}
+
+	fmt.Println("dumped remaining ", len(wal.Buffer)-bytesWritten, " bytes")
+	fmt.Println("remaining: ", wal.BytesRemaining, " bytes")
+
+	wal.BytesRemaining -= len(wal.Buffer) - bytesWritten
+
+	wal.Buffer = make([]byte, 0)
 	return nil
 }
 
 func (wal *WriteAheadLog) isRdyToDump() bool {
-	return wal.Buffer.Size >= wal.SegmentSize
+	return len(wal.Buffer) >= wal.SegmentSize
 }
 
 // use this method when adding a new entry to the WAL
@@ -191,7 +181,8 @@ func (wal *WriteAheadLog) Log(key, value []byte, operation int) error {
 	if err != nil {
 		return err
 	}
-	wal.Buffer.Add(*entry)
+
+	wal.Buffer = append(wal.Buffer, entry.Serialize()...)
 
 	if wal.isRdyToDump() {
 		err = wal.dump()
