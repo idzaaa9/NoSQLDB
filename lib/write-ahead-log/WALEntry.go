@@ -24,7 +24,6 @@ type WriteAheadLogEntry struct {
 	Value     []byte
 	Timestamp time.Time
 	Tombstone bool
-	Size      int
 }
 
 // key:value are the only things we need to generate an entry
@@ -49,15 +48,24 @@ func NewEntry(key, value []byte, operation int) (*WriteAheadLogEntry, error) {
 		tombstone = true
 	}
 
-	Size := CRC_SIZE + TIMESTAMP_SIZE + TOMBSTONE_SIZE + KEY_SIZE_SIZE + VALUE_SIZE_SIZE + len(key) + len(value)
-
 	return &WriteAheadLogEntry{
 		key,
 		value,
 		time.Now(),
 		tombstone,
-		Size,
 	}, nil
+}
+
+// RecoverEntry creates a new WriteAheadLogEntry from the given data
+// used when reading from segments
+func RecoverEntry(key, value []byte, timestamp time.Time, tombstone bool) *WriteAheadLogEntry {
+
+	return &WriteAheadLogEntry{
+		key,
+		value,
+		timestamp,
+		tombstone,
+	}
 }
 
 // Serialize converts WriteAheadLogEntry to a byte array
