@@ -51,7 +51,7 @@ func LoadConfig(filepath string) (*Config, error) {
 		}
 	*/
 
-	if config.WALSegmentSize <= 0 {
+	if config.WALSegmentSize <= KB {
 		config.WALSegmentSize = DefaultConfig.WALSegmentSize
 	}
 
