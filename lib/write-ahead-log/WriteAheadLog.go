@@ -108,7 +108,6 @@ func (wal *WriteAheadLog) dump() error {
 		}
 		wal.BytesRemaining -= len(wal.Buffer)
 		wal.Buffer = make([]byte, 0)
-		fmt.Println("written the whole buffer")
 		return nil
 	}
 
@@ -120,16 +119,12 @@ func (wal *WriteAheadLog) dump() error {
 	bytesWritten := wal.BytesRemaining
 	bytesToWrite := len(wal.Buffer) - wal.BytesRemaining
 
-	fmt.Println("dumped ", bytesWritten, " bytes to the current segment")
-	fmt.Println("remaining: ", wal.BytesRemaining, " bytes")
+	cycles := bytesToWrite / wal.SegmentSize
 
 	// close the current file
 	if err := wal.CurrentFile.Close(); err != nil {
 		return err
 	}
-	fmt.Println("segment closed")
-
-	cycles := bytesToWrite / wal.SegmentSize
 
 	// this loop is used in case we need to write more than one segment
 	for i := 0; i < cycles; i++ {
@@ -143,14 +138,11 @@ func (wal *WriteAheadLog) dump() error {
 			return err
 		}
 
-		fmt.Println("dumped whole segment")
-
 		bytesWritten += wal.SegmentSize
 
 		if err := wal.CurrentFile.Close(); err != nil {
 			return err
 		}
-		fmt.Println("segment closed")
 	}
 
 	// write the remaining bytes
@@ -161,9 +153,6 @@ func (wal *WriteAheadLog) dump() error {
 	if _, err := wal.CurrentFile.Write(wal.Buffer[bytesWritten:]); err != nil {
 		return err
 	}
-
-	fmt.Println("dumped remaining ", len(wal.Buffer)-bytesWritten, " bytes")
-	fmt.Println("remaining: ", wal.BytesRemaining, " bytes")
 
 	wal.BytesRemaining -= len(wal.Buffer) - bytesWritten
 
