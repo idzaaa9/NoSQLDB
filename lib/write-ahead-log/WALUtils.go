@@ -1,6 +1,7 @@
 package writeaheadlog
 
 import (
+	utils "NoSQLDB/lib/utils"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -47,50 +48,9 @@ func deserializeKeyOrValue(data []byte) string {
 	return string(data)
 }
 
-// util function which opens next segment
-
-func (reader *WALReader) openNextSegment() error {
-	// close the current file
-	if err := reader.CurrentFile.Close(); err != nil {
-		return err
-	}
-	fmt.Println("segment closed")
-	// open the next segment for reading
-
-	if reader.Cursor == reader.SegmentCount {
-		return errors.New("no more segments to read")
-	}
-
-	reader.Cursor++
-
-	segmentName := fmt.Sprintf("wal_%05d.log", reader.Cursor)
-	segmentPath := filepath.Join(reader.Path, segmentName)
-
-	file, err := os.OpenFile(segmentPath, os.O_RDONLY, 0644)
-
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("segment ", segmentPath, " opened")
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("file size: ", fileInfo.Size())
-
-	reader.CurrentFile = file
-	reader.BytesRemaining = int(fileInfo.Size())
-
-	return nil
-}
-
 // check if the crc is correct
-
 func checkCRC(data []byte) bool {
-	return binary.BigEndian.Uint32(data[:4]) == crc32.ChecksumIEEE(data[4:])
+	return binary.BigEndian.Uint32(data[:CRC_SIZE]) == crc32.ChecksumIEEE(data[CRC_SIZE:])
 }
 
 /*
@@ -157,4 +117,50 @@ func createWorkDir(filepath string) error {
 		err = os.MkdirAll(filepath, 0755)
 	}
 	return err
+}
+
+func (reader *WALReader) isLastSegment() bool {
+	return reader.Cursor == reader.LastSegment
+}
+
+// opens next segment for reading
+func (reader *WALReader) openNextSegment() error {
+	// close the current file
+	if err := reader.CurrentFile.Close(); err != nil {
+		return err
+	}
+
+	if reader.isLastSegment() {
+		reader.CurrentFile = nil
+		return errors.New("no more segments to read")
+	}
+
+	segmentName, segmentPath := "", ""
+
+	found := false
+	for !found {
+		reader.Cursor++
+
+		// open the next segment for reading
+		segmentName = fmt.Sprintf("wal_%05d.log", reader.Cursor)
+		segmentPath = filepath.Join(reader.Path, segmentName)
+
+		fileInfo, err := os.Stat(segmentPath)
+		if os.IsNotExist(err) || fileInfo.IsDir() {
+			continue
+		}
+
+		found = true
+	}
+
+	file, err := os.OpenFile(segmentPath, os.O_RDONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	reader.CurrentFile = file
+	reader.BytesRemaining = utils.GetFileSize(*file)
+	reader.CurrentSegmentSize = reader.BytesRemaining
+
+	return nil
 }
