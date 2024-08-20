@@ -1,6 +1,7 @@
 package tokenbucket
 
 import (
+	"bytes"
 	"encoding/binary"
 	"sync"
 	"time"
@@ -15,12 +16,12 @@ type TokenBucket struct {
 	mu         sync.Mutex    // mutex to protect the bucket
 }
 
-func NewTokenBucket(size, rate int) *TokenBucket {
+func NewTokenBucket(size, rate int, limit time.Duration) *TokenBucket {
 	return &TokenBucket{
 		size:       size,
 		tokens:     size,
 		rate:       rate,
-		limit:      time.Second,
+		limit:      limit,
 		lastRefill: time.Now(),
 	}
 }
@@ -54,31 +55,73 @@ func (tb *TokenBucket) RemoveToken() bool {
 }
 
 func (tb *TokenBucket) Serialize() []byte {
-	intSize := 4
-	buf := make([]byte, 4*intSize+8) // tokens, size, limit, lastRefill
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
 
-	binary.BigEndian.PutUint32(buf[0:4], uint32(tb.tokens))
-	binary.BigEndian.PutUint32(buf[4:8], uint32(tb.size))
-	binary.BigEndian.PutUint32(buf[8:12], uint32(tb.rate))
-	binary.BigEndian.PutUint32(buf[12:16], uint32(tb.limit))
-	binary.BigEndian.PutUint64(buf[16:24], uint64(tb.lastRefill.Unix()))
+	buf := new(bytes.Buffer)
 
-	return buf
+	// Write integer fields
+	binary.Write(buf, binary.BigEndian, int32(tb.tokens))
+	binary.Write(buf, binary.BigEndian, int32(tb.size))
+	binary.Write(buf, binary.BigEndian, int32(tb.rate))
+	binary.Write(buf, binary.BigEndian, int64(tb.limit))
+
+	// Write time field with nanoseconds precision
+	binary.Write(buf, binary.BigEndian, tb.lastRefill.UnixNano())
+
+	return buf.Bytes()
 }
 
 func Deserialize(data []byte) *TokenBucket {
-	Tokens := int(binary.BigEndian.Uint32(data[0:4]))
-	Size := int(binary.BigEndian.Uint32(data[4:8]))
-	Rate := int(binary.BigEndian.Uint32(data[8:12]))
-	Limit := time.Duration(binary.BigEndian.Uint32(data[12:16]))
-	LastRefillUnix := int64(binary.BigEndian.Uint64(data[16:24]))
-	LastRefill := time.Unix(LastRefillUnix, 0)
+	buf := bytes.NewReader(data)
+
+	var tokens, size, rate int32
+	var limit int64
+	var lastRefillNano int64
+
+	// Read integer fields
+	binary.Read(buf, binary.BigEndian, &tokens)
+	binary.Read(buf, binary.BigEndian, &size)
+	binary.Read(buf, binary.BigEndian, &rate)
+	binary.Read(buf, binary.BigEndian, &limit)
+
+	// Read time field with nanoseconds precision
+	binary.Read(buf, binary.BigEndian, &lastRefillNano)
+	lastRefill := time.Unix(0, lastRefillNano) // Reconstruct time with nanoseconds
 
 	return &TokenBucket{
-		tokens:     Tokens,
-		size:       Size,
-		rate:       Rate,
-		limit:      Limit,
-		lastRefill: LastRefill,
+		tokens:     int(tokens),
+		size:       int(size),
+		rate:       int(rate),
+		limit:      time.Duration(limit),
+		lastRefill: lastRefill,
 	}
+}
+
+func (tb *TokenBucket) Tokens() int {
+	tb.mu.Lock()
+
+	defer tb.mu.Unlock()
+
+	return tb.tokens
+}
+
+func (tb *TokenBucket) RefillTokensTest() {
+	tb.mu.Lock()
+
+	defer tb.mu.Unlock()
+
+	tb.refillBucket()
+}
+
+func (tb *TokenBucket) CapacityTest() int {
+	return tb.size
+}
+
+func (tb *TokenBucket) RateTest() int {
+	return tb.rate
+}
+
+func (tb *TokenBucket) LastRefillTest() time.Time {
+	return tb.lastRefill
 }
