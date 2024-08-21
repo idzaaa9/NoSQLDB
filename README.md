@@ -35,4 +35,4 @@ should be updated as we implement the features.
   - [ ] leveled compaction
 - [ ] Cache
   - [ ] LRU
-- [ ] Token bucket
+- [x] Token bucket
