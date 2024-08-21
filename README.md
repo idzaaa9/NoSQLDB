@@ -8,17 +8,17 @@ Also supports working with probabilistic data structures serialized as `key:valu
 ## Stuff to implement
 
 The whole project should be **fully configurable**. Therefore the 
-- [ ] configuration
+- [x] configuration
 
 should be updated as we implement the features.
 
-- [ ] config handling
+- [x] config handling
 - [ ] probabilistic data structures
   - [ ] bloom filter
   - [ ] countMinSketch
   - [ ] hyperLogLog
   - [ ] simHash
-- [ ] write ahead log
+- [x] write ahead log
 - [ ] memtable
   - memtable should be implemented as a:
   - [ ] hash map
@@ -36,4 +36,3 @@ should be updated as we implement the features.
 - [ ] Cache
   - [ ] LRU
 - [ ] Token bucket
-
