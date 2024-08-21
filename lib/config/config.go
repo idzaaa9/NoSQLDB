@@ -16,12 +16,16 @@ const (
 type Config struct {
 	// BloomFilterFalsePositiveRate float32 `json:"bloom_filter_false_positive_rate"`
 	// BloomFilterExpectedElements  int     `json:"bloom_filter_expected_elements"`
+	WALSegmentSize int    `json:"wal_segment_size"`
+	WALFolder      string `json:"wal_folder"`
 }
 
 // default values go here
 var DefaultConfig = Config{
 	// BloomFilterFalsePositiveRate: 0.2,
 	// BloomFilterExpectedElements:  50000,
+	WALSegmentSize: 64 * KB,
+	WALFolder:      "data/wal/",
 }
 
 func LoadConfig(filepath string) (*Config, error) {
@@ -46,5 +50,14 @@ func LoadConfig(filepath string) (*Config, error) {
 			config.BloomFilterExpectedElements = DefaultConfig.BloomFilterExpectedElements
 		}
 	*/
+
+	if config.WALSegmentSize <= KB {
+		config.WALSegmentSize = DefaultConfig.WALSegmentSize
+	}
+
+	if config.WALFolder == "" {
+		config.WALFolder = DefaultConfig.WALFolder
+	}
+
 	return &config, err
 }
