@@ -1,5 +1,3 @@
-# ignore the tmp directory
-tmp/*
-
-# Ignore the main file
 main.go
+
+tmp/*
