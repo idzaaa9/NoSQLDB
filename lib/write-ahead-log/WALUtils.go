@@ -23,19 +23,19 @@ func deserializeTombstone(data []byte) bool {
 	return data[0] == 1
 }
 
-func deserializeKeySize(data []byte) uint64 {
-	return binary.BigEndian.Uint64(data)
+func deserializeKeySize(data []byte) int {
+	return int(binary.BigEndian.Uint64(data))
 }
 
-func deserializeValueSize(data []byte) uint64 {
-	return binary.BigEndian.Uint64(data)
+func deserializeValueSize(data []byte) int {
+	return int(binary.BigEndian.Uint64(data))
 }
 
 func deserializeCRC(data []byte) uint32 {
 	return binary.BigEndian.Uint32(data)
 }
 
-func deserializeHeader(data []byte) (time.Time, bool, uint64, uint64) {
+func deserializeHeader(data []byte) (time.Time, bool, int, int) {
 	timestamp := deserializeTimestamp(data[CRC_SIZE : CRC_SIZE+TIMESTAMP_SIZE])
 	tombstone := deserializeTombstone(data[CRC_SIZE+TIMESTAMP_SIZE : CRC_SIZE+TIMESTAMP_SIZE+TOMBSTONE_SIZE])
 	keysize := deserializeKeySize(data[CRC_SIZE+TIMESTAMP_SIZE+TOMBSTONE_SIZE : CRC_SIZE+TIMESTAMP_SIZE+TOMBSTONE_SIZE+KEY_SIZE_SIZE])
