@@ -179,3 +179,7 @@ func (wal *WriteAheadLog) Log(key, value []byte, operation int) error {
 
 	return err
 }
+
+func (wal *WriteAheadLog) DumpTest() error {
+	return wal.dump()
+}
