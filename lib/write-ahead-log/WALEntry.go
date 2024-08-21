@@ -4,6 +4,7 @@ import (
 	hash "NoSQLDB/lib/utils"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -99,4 +100,11 @@ func (entry *WriteAheadLogEntry) Serialize() []byte {
 	returnArray = append(crc, returnArray...)
 
 	return returnArray
+}
+
+func (entry *WriteAheadLogEntry) Print() {
+	fmt.Println("Key: ", string(entry.Key))
+	fmt.Println("Value: ", string(entry.Value))
+	fmt.Println("Timestamp: ", entry.Timestamp)
+	fmt.Println("Tombstone: ", entry.Tombstone)
 }
