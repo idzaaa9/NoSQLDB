@@ -2,7 +2,6 @@ package memtable
 
 import (
 	"errors"
-	"fmt"
 )
 
 type MapMemtable struct {
@@ -17,7 +16,7 @@ func NewMapMemtable(threshold int) *MapMemtable {
 	}
 }
 
-func (m *MapMemtable) Put(key string, value string) error {
+func (m *MapMemtable) Put(key string, value []byte) error {
 	m.data[key] = Entry{
 		key:       key,
 		value:     value,
@@ -26,18 +25,18 @@ func (m *MapMemtable) Put(key string, value string) error {
 	return nil
 }
 
-func (m *MapMemtable) Get(key string) (Entry, error) {
+func (m *MapMemtable) Get(key string) (*Entry, error) {
 	value, ok := m.data[key]
 	if !ok {
-		return value, errors.New(fmt.Sprintf("entry with key %s not found", key))
+		return &value, errors.New("entry not found")
 	}
-	return value, nil
+	return &value, nil
 }
 
 func (m *MapMemtable) Delete(key string) error {
 	m.data[key] = Entry{
 		key:       key,
-		value:     "",
+		value:     nil,
 		tombstone: true,
 	}
 	return nil
@@ -47,6 +46,11 @@ func (m *MapMemtable) Size() int {
 	return len(m.data)
 }
 
-func (m *MapMemtable) ShouldFlush() bool {
+func (m *MapMemtable) IsFull() bool {
 	return m.Size() >= m.threshhold
+}
+
+// TODO: Implement this
+func (m *MapMemtable) Flush() error {
+	return nil
 }
