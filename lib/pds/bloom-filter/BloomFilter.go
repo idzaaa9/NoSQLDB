@@ -15,9 +15,9 @@ type BloomFilter struct {
 
 // NewBloomFilter creates a new Bloom filter with the given expected number of elements and false positive rate.
 func NewBloomFilter(expectedElements int, falsePositiveRate float64) *BloomFilter {
-	m := utils.CalculateM(expectedElements, falsePositiveRate) // Calculate the size of the bitset
-	k := utils.CalculateK(expectedElements, m)                 // Calculate the number of hash functions
-	hashes := utils.CreateHashFunctions(k)                     // Create the hash functions
+	m := utils.CalculateMBF(expectedElements, falsePositiveRate) // Calculate the size of the bitset
+	k := utils.CalculateKBF(expectedElements, m)                 // Calculate the number of hash functions
+	hashes := utils.CreateHashFunctions(k)                       // Create the hash functions
 
 	return &BloomFilter{
 		Bitset: make([]bool, m),

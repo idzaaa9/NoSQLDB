@@ -86,8 +86,8 @@ func TestCalculateParameters(t *testing.T) {
 	expectedElements := 1000
 	falsePositiveRate := 0.01
 
-	m := utils.CalculateM(expectedElements, falsePositiveRate)
-	k := utils.CalculateK(expectedElements, m)
+	m := utils.CalculateMBF(expectedElements, falsePositiveRate)
+	k := utils.CalculateKBF(expectedElements, m)
 
 	if m <= 0 {
 		t.Errorf("Expected m to be greater than 0, got %d", m)
