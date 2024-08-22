@@ -5,19 +5,19 @@ import (
 	"fmt"
 )
 
-type MapMemTable struct {
+type MapMemtable struct {
 	data       map[string]Entry
 	threshhold int
 }
 
-func NewMapMemTable(threshold int) *MapMemTable {
-	return &MapMemTable{
+func NewMapMemtable(threshold int) *MapMemtable {
+	return &MapMemtable{
 		data:       make(map[string]Entry),
 		threshhold: threshold,
 	}
 }
 
-func (m *MapMemTable) Put(key string, value string) error {
+func (m *MapMemtable) Put(key string, value string) error {
 	m.data[key] = Entry{
 		key:       key,
 		value:     value,
@@ -26,7 +26,7 @@ func (m *MapMemTable) Put(key string, value string) error {
 	return nil
 }
 
-func (m *MapMemTable) Get(key string) (Entry, error) {
+func (m *MapMemtable) Get(key string) (Entry, error) {
 	value, ok := m.data[key]
 	if !ok {
 		return value, errors.New(fmt.Sprintf("entry with key %s not found", key))
@@ -34,7 +34,7 @@ func (m *MapMemTable) Get(key string) (Entry, error) {
 	return value, nil
 }
 
-func (m *MapMemTable) Delete(key string) error {
+func (m *MapMemtable) Delete(key string) error {
 	m.data[key] = Entry{
 		key:       key,
 		value:     "",
@@ -43,10 +43,10 @@ func (m *MapMemTable) Delete(key string) error {
 	return nil
 }
 
-func (m *MapMemTable) Size() int {
+func (m *MapMemtable) Size() int {
 	return len(m.data)
 }
 
-func (m *MapMemTable) ShouldFlush() bool {
+func (m *MapMemtable) ShouldFlush() bool {
 	return m.Size() >= m.threshhold
 }

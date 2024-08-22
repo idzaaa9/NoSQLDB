@@ -4,8 +4,8 @@ import (
 	"testing"
 )
 
-func TestNewMapMemTable(t *testing.T) {
-	m := NewMapMemTable(10)
+func TestNewMapMemtable(t *testing.T) {
+	m := NewMapMemtable(10)
 	if m.threshhold != 10 {
 		t.Errorf("expected threshold to be 10, got %d", m.threshhold)
 	}
@@ -15,7 +15,7 @@ func TestNewMapMemTable(t *testing.T) {
 }
 
 func TestPut(t *testing.T) {
-	m := NewMapMemTable(10)
+	m := NewMapMemtable(10)
 	err := m.Put("key1", "value1")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -31,7 +31,7 @@ func TestPut(t *testing.T) {
 }
 
 func TestGetNonExistentKey(t *testing.T) {
-	m := NewMapMemTable(10)
+	m := NewMapMemtable(10)
 	_, err := m.Get("nonexistent")
 	if err == nil {
 		t.Errorf("expected an error for nonexistent key, got nil")
@@ -39,7 +39,7 @@ func TestGetNonExistentKey(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	m := NewMapMemTable(10)
+	m := NewMapMemtable(10)
 	err := m.Put("key1", "value1")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -63,7 +63,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestSize(t *testing.T) {
-	m := NewMapMemTable(10)
+	m := NewMapMemtable(10)
 	m.Put("key1", "value1")
 	m.Put("key2", "value2")
 	if m.Size() != 2 {
@@ -77,7 +77,7 @@ func TestSize(t *testing.T) {
 }
 
 func TestShouldFlush(t *testing.T) {
-	m := NewMapMemTable(2)
+	m := NewMapMemtable(2)
 	if m.ShouldFlush() {
 		t.Errorf("expected ShouldFlush to be false when size is 0")
 	}
