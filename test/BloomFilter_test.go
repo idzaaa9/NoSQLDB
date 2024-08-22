@@ -1,7 +1,7 @@
 package test
 
 import (
-	bloom "NoSQLDB/lib/pds/bloom-filter"
+	"NoSQLDB/lib/pds"
 	"NoSQLDB/lib/utils"
 	"os"
 	"testing"
@@ -11,7 +11,7 @@ func TestBloomFilter_AddAndQuery(t *testing.T) {
 	expectedElements := 1000
 	falsePositiveRate := 0.01
 
-	bf := bloom.NewBloomFilter(expectedElements, falsePositiveRate)
+	bf := pds.NewBloomFilter(expectedElements, falsePositiveRate)
 	bf.Add("example")
 	bf.Add("test")
 
@@ -32,7 +32,7 @@ func TestBloomFilter_SerializeAndDeserialize(t *testing.T) {
 	expectedElements := 1000
 	falsePositiveRate := 0.01
 
-	bf := bloom.NewBloomFilter(expectedElements, falsePositiveRate)
+	bf := pds.NewBloomFilter(expectedElements, falsePositiveRate)
 	bf.Add("example")
 	bf.Add("test")
 
@@ -44,7 +44,7 @@ func TestBloomFilter_SerializeAndDeserialize(t *testing.T) {
 	defer os.Remove("bloom_filter_test.gob")
 
 	// Deserialize
-	newBf := &bloom.BloomFilter{}
+	newBf := &pds.BloomFilter{}
 	err = newBf.Deserialize("bloom_filter_test.gob")
 	if err != nil {
 		t.Fatalf("Failed to deserialize Bloom filter: %v", err)
@@ -67,7 +67,7 @@ func TestBloomFilter_Clear(t *testing.T) {
 	expectedElements := 1000
 	falsePositiveRate := 0.01
 
-	bf := bloom.NewBloomFilter(expectedElements, falsePositiveRate)
+	bf := pds.NewBloomFilter(expectedElements, falsePositiveRate)
 	bf.Add("example")
 	bf.Add("test")
 
