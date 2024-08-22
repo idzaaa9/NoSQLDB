@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-const (
-	testFilePath    = "./test_wal/"
+var (
+	testFilePath    = filepath.Join(".", "test_wal")
 	testSegmentSize = 1024 // 1 KB segments for simplicity
 )
 
