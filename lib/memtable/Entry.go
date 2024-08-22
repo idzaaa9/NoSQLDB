@@ -4,7 +4,7 @@ import "encoding/binary"
 
 type Entry struct {
 	key       string
-	value     string
+	value     []byte
 	tombstone bool
 }
 
@@ -12,7 +12,7 @@ func (e *Entry) Key() string {
 	return e.key
 }
 
-func (e *Entry) Value() string {
+func (e *Entry) Value() []byte {
 	return e.value
 }
 
