@@ -8,14 +8,6 @@ type Entry struct {
 	tombstone bool
 }
 
-func NewEntry(key string, value string, operation int) *Entry {
-	return &Entry{
-		key:       key,
-		value:     value,
-		tombstone: operation == DELETE,
-	}
-}
-
 func (e *Entry) Key() string {
 	return e.key
 }
