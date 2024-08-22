@@ -1,4 +1,4 @@
-package tokenbucket_test
+package test
 
 import (
 	tb "NoSQLDB/lib/token-bucket"
