@@ -81,7 +81,7 @@ func TestSerializeDeserialize(t *testing.T) {
 	defer os.Remove(filename) // Clean up the file after test
 
 	// Deserialize from file
-	deserializedCMS, err := pds.Deserialize(filename)
+	deserializedCMS, err := pds.DeserializeCMS(filename)
 	if err != nil {
 		t.Fatalf("Failed to deserialize: %v", err)
 	}

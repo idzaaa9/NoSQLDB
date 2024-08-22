@@ -71,8 +71,8 @@ func (cms *CountMinSketch) Serialize(filename string) error {
 	return nil
 }
 
-// Deserialize loads the Count-min sketch from a file
-func Deserialize(filename string) (*CountMinSketch, error) {
+// DeserializeCMS loads the Count-min sketch from a file
+func DeserializeCMS(filename string) (*CountMinSketch, error) {
 	file, err := os.Open(filename) // Open the file to read the data
 	if err != nil {
 		return nil, err
