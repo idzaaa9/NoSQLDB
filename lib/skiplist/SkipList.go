@@ -13,14 +13,13 @@ type Node struct {
 	forward   []*Node
 }
 
-// SkipList represents the skip list data structure.
 type SkipList struct {
 	maxLevel int
 	head     *Node
 	level    int
 }
 
-// NewSkipList creates a new SkipList with the specified maximum level and probability.
+// NewSkipList creates a new SkipList with the specified maximum level
 func NewSkipList(maxLevel int) *SkipList {
 	head := &Node{
 		forward: make([]*Node, maxLevel+1),
