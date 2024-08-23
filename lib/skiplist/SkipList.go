@@ -143,3 +143,12 @@ func (sl *SkipList) PrintList() {
 		fmt.Println("nil")
 	}
 }
+
+func (sl *SkipList) Size() int {
+	current := sl.head
+	size := 0
+	for current.forward[0] != nil {
+		current = current.forward[0]
+	}
+	return size
+}
