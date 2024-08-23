@@ -66,7 +66,7 @@ func (hll *HLL) Estimate() float64 {
 
 	alpha := 0.7213 / (1.0 + 1.079/float64(hll.M))
 	estimation := alpha * math.Pow(float64(hll.M), 2.0) / sum
-	emptyRegs := hll.emptyCount()
+	emptyRegs := hll.EmptyCount()
 	if estimation <= 2.5*float64(hll.M) { // Small range correction
 		if emptyRegs > 0 {
 			estimation = float64(hll.M) * math.Log(float64(hll.M)/float64(emptyRegs))
@@ -77,8 +77,8 @@ func (hll *HLL) Estimate() float64 {
 	return estimation
 }
 
-// emptyCount returns the number of empty registers in the HyperLogLog structure.
-func (hll *HLL) emptyCount() int {
+// EmptyCount returns the number of empty registers in the HyperLogLog structure.
+func (hll *HLL) EmptyCount() int {
 	sum := 0
 	for _, val := range hll.Reg {
 		if val == 0 {
