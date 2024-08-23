@@ -5,41 +5,30 @@ import (
 	"math/rand"
 )
 
-type SkipListNode struct {
-	key       string          // key is a string
-	value     []byte          // value is a byte slice
-	tombstone bool            // tombstone is a boolean
-	next      []*SkipListNode // next is a slice of pointers to the next node
+// Node represents a node in the skip list.
+type Node struct {
+	key       string
+	value     []byte
+	tombstone bool
+	forward   []*Node
 }
 
-func NewSkipListNode(key string, value []byte, height int) *SkipListNode {
-	return &SkipListNode{
-		key:       key,
-		value:     value,
-		tombstone: false,
-		next:      make([]*SkipListNode, height),
-	}
-}
-
-func NewSkipListNodeTombstone(key string, height int) *SkipListNode {
-	return &SkipListNode{
-		key:       key,
-		tombstone: true,
-		next:      make([]*SkipListNode, height),
-	}
-}
-
+// SkipList represents the skip list data structure.
 type SkipList struct {
-	maxHeight int
-	head      *SkipListNode
-	height    int
+	maxLevel int
+	head     *Node
+	level    int
 }
 
-func NewSkipList(maxHeight int) *SkipList {
+// NewSkipList creates a new SkipList with the specified maximum level and probability.
+func NewSkipList(maxLevel int) *SkipList {
+	head := &Node{
+		forward: make([]*Node, maxLevel+1),
+	}
 	return &SkipList{
-		maxHeight: maxHeight,
-		head:      NewSkipListNode("", nil, maxHeight),
-		height:    0,
+		maxLevel: maxLevel,
+		head:     head,
+		level:    0,
 	}
 }
 
@@ -48,95 +37,110 @@ func (s *SkipList) roll() int {
 	// possible ret values from rand are 0 and 1
 	// we stop shen we get a 0
 	for ; rand.Int31n(2) == 1; level++ {
-		if level >= s.maxHeight {
+		if level >= s.level {
 			return level
 		}
 	}
 	return level
 }
 
-func (s *SkipList) find(key string) (*SkipListNode, []*SkipListNode) {
-	var next *SkipListNode
-	var path []*SkipListNode
+// Put inserts a key-value pair into the skip list.
+func (sl *SkipList) Put(key string, value []byte) {
+	update := make([]*Node, sl.maxLevel+1)
+	current := sl.head
 
-	prev := s.head
-	for i := s.height - 1; i >= 0; i-- {
-		next = prev.next[i]
-		for next != nil && next.key < key {
-			prev = next
-			next = next.next[i]
+	for i := sl.level; i >= 0; i-- {
+		for current.forward[i] != nil && current.forward[i].key < key {
+			current = current.forward[i]
 		}
-		path = append(path, prev)
+		update[i] = current
 	}
 
-	if next != nil && next.key == key {
-		return next, path
-	}
-	return nil, path
-}
-
-func (s *SkipList) Get(key string) (*SkipListNode, error) {
-	value, _ := s.find(key)
-	if value == nil {
-		return nil, fmt.Errorf("key not found")
-	}
-	return value, nil
-}
-
-func (s *SkipList) Put(key string, value []byte) {
-	node, path := s.find(key)
-	if node != nil {
-		node.value = value
+	current = current.forward[0]
+	if current != nil && current.key == key {
+		if !current.tombstone {
+			current.value = value
+		} else {
+			current.value = value
+			current.tombstone = false
+		}
 		return
 	}
 
-	level := s.roll()
-	if level > s.height {
-		s.height = level
+	newLevel := sl.roll()
+	if newLevel > sl.level {
+		for i := sl.level + 1; i <= newLevel; i++ {
+			update[i] = sl.head
+		}
+		sl.level = newLevel
 	}
 
-	newNode := NewSkipListNode(key, value, level)
-	for i := 0; i < level; i++ {
-		newNode.next[i] = path[i].next[i]
-		path[i].next[i] = newNode
-	}
-}
-
-func (s *SkipList) PutLogicallyDeleted(key string) {
-	node, path := s.find(key)
-	if node != nil {
-		node.tombstone = true
-		return
+	newNode := &Node{
+		key:       key,
+		value:     value,
+		tombstone: false,
+		forward:   make([]*Node, newLevel+1),
 	}
 
-	level := s.roll()
-	if level > s.height {
-		s.height = level
-	}
-
-	newNode := NewSkipListNodeTombstone(key, level)
-	for i := 0; i < level; i++ {
-		newNode.next[i] = path[i].next[i]
-		path[i].next[i] = newNode
+	for i := 0; i <= newLevel; i++ {
+		newNode.forward[i] = update[i].forward[i]
+		update[i].forward[i] = newNode
 	}
 }
 
-func (s *SkipList) Delete(key string) {
-	node, path := s.find(key)
-	if node == nil {
-		return
+// Get retrieves the value associated with the key.
+func (sl *SkipList) Get(key string) ([]byte, bool) {
+	current := sl.head
+	for i := sl.level; i >= 0; i-- {
+		for current.forward[i] != nil && current.forward[i].key < key {
+			current = current.forward[i]
+		}
 	}
 
-	for i := 0; i < len(node.next); i++ {
-		path[i].next[i] = node.next[i]
+	current = current.forward[0]
+	if current != nil && current.key == key && !current.tombstone {
+		return current.value, true
 	}
+
+	return nil, false
 }
 
-func (s *SkipList) LogicallyDelete(key string) {
-	node, _ := s.find(key)
-	if node == nil {
-		s.PutLogicallyDeleted(key)
+// LogicallyDelete marks the node with the given key as logically deleted.
+func (sl *SkipList) LogicallyDelete(key string) bool {
+	update := make([]*Node, sl.maxLevel+1)
+	current := sl.head
+
+	for i := sl.level; i >= 0; i-- {
+		for current.forward[i] != nil && current.forward[i].key < key {
+			current = current.forward[i]
+		}
+		update[i] = current
 	}
 
-	node.tombstone = true
+	current = current.forward[0]
+	if current != nil && current.key == key {
+		if !current.tombstone {
+			current.tombstone = true
+			return true
+		}
+	}
+
+	return false
+}
+
+// PrintList prints the skip list for debugging purposes.
+func (sl *SkipList) PrintList() {
+	for i := sl.level; i >= 0; i-- {
+		fmt.Printf("Level %d: ", i)
+		node := sl.head.forward[i]
+		for node != nil {
+			if node.tombstone {
+				fmt.Printf("{%s: <deleted>} -> ", node.key)
+			} else {
+				fmt.Printf("{%s: %s} -> ", node.key, node.value)
+			}
+			node = node.forward[i]
+		}
+		fmt.Println("nil")
+	}
 }
