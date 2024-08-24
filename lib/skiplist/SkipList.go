@@ -13,6 +13,18 @@ type Node struct {
 	forward   []*Node
 }
 
+func (n *Node) Key() string {
+	return n.key
+}
+
+func (n *Node) Value() []byte {
+	return n.value
+}
+
+func (n *Node) Tombstone() bool {
+	return n.tombstone
+}
+
 type SkipList struct {
 	maxLevel int
 	head     *Node
@@ -88,7 +100,7 @@ func (sl *SkipList) Put(key string, value []byte) {
 }
 
 // Get retrieves the value associated with the key.
-func (sl *SkipList) Get(key string) ([]byte, bool) {
+func (sl *SkipList) Get(key string) (*Node, bool) {
 	current := sl.head
 	for i := sl.level; i >= 0; i-- {
 		for current.forward[i] != nil && current.forward[i].key < key {
@@ -98,7 +110,7 @@ func (sl *SkipList) Get(key string) ([]byte, bool) {
 
 	current = current.forward[0]
 	if current != nil && current.key == key && !current.tombstone {
-		return current.value, true
+		return current, true
 	}
 
 	return nil, false
@@ -128,7 +140,7 @@ func (sl *SkipList) LogicallyDelete(key string) bool {
 }
 
 // PrintList prints the skip list for debugging purposes.
-func (sl *SkipList) PrintList() {
+func (sl *SkipList) Print() {
 	for i := sl.level; i >= 0; i-- {
 		fmt.Printf("Level %d: ", i)
 		node := sl.head.forward[i]
@@ -148,6 +160,7 @@ func (sl *SkipList) Size() int {
 	current := sl.head
 	size := 0
 	for current.forward[0] != nil {
+		size++
 		current = current.forward[0]
 	}
 	return size
