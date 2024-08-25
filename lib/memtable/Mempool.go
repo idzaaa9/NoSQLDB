@@ -12,7 +12,7 @@ type Mempool struct {
 	outputDirectory string
 }
 
-func NewMempool(numTables, memtableSize int, outputDir, memtableType string) (*Mempool, error) {
+func NewMempool(numTables, memtableSize, skipListMaxLevel int, outputDir, memtableType string) (*Mempool, error) {
 	memtables := make([]Memtable, numTables)
 	var err error
 	for i := 0; i < numTables; i++ {
@@ -22,7 +22,7 @@ func NewMempool(numTables, memtableSize int, outputDir, memtableType string) (*M
 		case USE_MAP:
 			memtables[i] = NewMapMemtable(memtableSize)
 		case USE_SKIP_LIST:
-			memtables[i] = NewSkipListMemtable()
+			memtables[i] = NewSkipListMemtable(skipListMaxLevel, memtableSize)
 		default:
 			return nil, errors.New("invalid memtable type")
 		}
