@@ -1,6 +1,8 @@
 package skiplist
 
 import (
+	"encoding/binary"
+	"fmt"
 	"testing"
 )
 
@@ -26,7 +28,7 @@ func TestSkipList(t *testing.T) {
 
 	for _, test := range tests {
 		got, found := sl.Get(test.key)
-		if found != test.found || (found && string(got) != string(test.value)) {
+		if found != test.found || (found && string(got.value) != string(test.value)) {
 			t.Errorf("Get(%s) = (%v, %v); want (%v, %v)", test.key, got, found, test.value, test.found)
 		}
 	}
@@ -42,17 +44,17 @@ func TestSkipList(t *testing.T) {
 	}
 
 	// Ensure other keys are still accessible
-	if got, found := sl.Get("key1"); !found || string(got) != "value1" {
+	if got, found := sl.Get("key1"); !found || string(got.value) != "value1" {
 		t.Errorf("Get('key1') = (%v, %v); want (value1, true)", got, found)
 	}
 
-	if got, found := sl.Get("key3"); !found || string(got) != "value3" {
+	if got, found := sl.Get("key3"); !found || string(got.value) != "value3" {
 		t.Errorf("Get('key3') = (%v, %v); want (value3, true)", got, found)
 	}
 
 	// Test Put after LogicallyDelete
 	sl.Put("key2", []byte("new_value2"))
-	if got, found := sl.Get("key2"); !found || string(got) != "new_value2" {
+	if got, found := sl.Get("key2"); !found || string(got.value) != "new_value2" {
 		t.Errorf("Get('key2') after Put = (%v, %v); want (new_value2, true)", got, found)
 	}
 }
@@ -73,7 +75,25 @@ func TestSkipListEmpty(t *testing.T) {
 
 	// Test Put and Get on empty list
 	sl.Put("key1", []byte("value1"))
-	if got, found := sl.Get("key1"); !found || string(got) != "value1" {
+	if got, found := sl.Get("key1"); !found || string(got.value) != "value1" {
 		t.Errorf("Get('key1') after Put on empty list = (%v, %v); want (value1, true)", got, found)
+	}
+}
+
+func TestSkipListMany(t *testing.T) {
+	sl := NewSkipList(4)
+	for i := 0; i < 30; i++ {
+		key := fmt.Sprintf("key%d", i)
+		buf := make([]byte, 4)
+		binary.BigEndian.PutUint32(buf, uint32(i))
+		sl.Put(key, buf)
+	}
+	for i := 0; i < 30; i++ {
+		key := fmt.Sprintf("key%d", i)
+		buf := make([]byte, 4)
+		binary.BigEndian.PutUint32(buf, uint32(i))
+		if got, found := sl.Get(key); !found || string(got.value) != string(buf) {
+			t.Errorf("Get(%d) = (%v, %v); want (%v, %v)", i, got, found, i, true)
+		}
 	}
 }

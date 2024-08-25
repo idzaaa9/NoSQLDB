@@ -47,10 +47,8 @@ func (s *SkipList) roll() int {
 	level := 0
 	// possible ret values from rand are 0 and 1
 	// we stop shen we get a 0
-	for ; rand.Int31n(2) == 1; level++ {
-		if level >= s.level {
-			return level
-		}
+	for rand.Int31n(2) == 1 && level < s.maxLevel {
+		level++
 	}
 	return level
 }
