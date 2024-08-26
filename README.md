@@ -19,11 +19,11 @@ should be updated as we implement the features.
   - [ ] hyperLogLog
   - [ ] simHash
 - [x] write ahead log
-- [ ] memtable
+- [x] memtable
   - memtable should be implemented as a:
-  - [ ] hash map
-  - [ ] skip list
-  - [ ] b-tree
+  - [x] hash map
+  - [x] skip list
+  - [x] b-tree
 - [ ] SSTable
   - [ ] data part
   - [ ] index part
