@@ -6,6 +6,18 @@ type Entry struct {
 	tombstone bool
 }
 
+func (e *Entry) Key() string {
+	return e.key
+}
+
+func (e *Entry) Value() []byte {
+	return e.value
+}
+
+func (e *Entry) Tombstone() bool {
+	return e.tombstone
+}
+
 type Node struct {
 	keys     []string
 	values   []*Entry
