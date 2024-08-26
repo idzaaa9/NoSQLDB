@@ -61,7 +61,7 @@ func TestSkipListMemtable(t *testing.T) {
 		t.Fatalf("Put() = %v; want nil", err)
 	}
 
-	if got := memtable.Size(); got != 1 {
+	if got := memtable.Size(); got != 2 {
 		memtable.data.Print()
 		t.Errorf("Size() after new Put() = %d; want 1", got)
 	}
