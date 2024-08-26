@@ -12,13 +12,14 @@ type Mempool struct {
 	outputDirectory string
 }
 
-func NewMempool(numTables, memtableSize, skipListMaxLevel int, outputDir, memtableType string) (*Mempool, error) {
+func NewMempool(
+	numTables, memtableSize, skipListMaxLevel, BTreeMinDegree int, outputDir, memtableType string) (*Mempool, error) {
 	memtables := make([]Memtable, numTables)
 	var err error
 	for i := 0; i < numTables; i++ {
 		switch memtableType {
 		case USE_BTREE:
-			memtables[i] = NewBTreeMemtable()
+			memtables[i] = NewBTreeMemtable(BTreeMinDegree, memtableSize)
 		case USE_MAP:
 			memtables[i] = NewMapMemtable(memtableSize)
 		case USE_SKIP_LIST:
@@ -29,10 +30,13 @@ func NewMempool(numTables, memtableSize, skipListMaxLevel int, outputDir, memtab
 	}
 	fileInfo, err := os.Stat(outputDir)
 	if err != nil {
-		return nil, err
+		err = os.Mkdir(outputDir, 0755)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if !fileInfo.IsDir() {
-		return nil, errors.New("provided mempool filepath isnt an directory")
+	if fileInfo == nil || !fileInfo.IsDir() {
+		return nil, errors.New("output directory is not a directory")
 	}
 
 	return &Mempool{
