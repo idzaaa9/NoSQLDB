@@ -2,8 +2,8 @@ package pds
 
 import (
 	"NoSQLDB/lib/utils"
+	"bytes"
 	"encoding/gob"
-	"os"
 )
 
 // BloomFilter represents a probabilistic data structure for set membership testing.
@@ -54,26 +54,19 @@ func (bf *BloomFilter) Clear() {
 	}
 }
 
-// Serialize saves the Bloom filter to a file.
-func (bf *BloomFilter) Serialize(filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
+// SerializeToBytes serializes the Bloom filter and returns a byte slice.
+func (bf *BloomFilter) SerializeToBytes() ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	if err := encoder.Encode(bf); err != nil {
+		return nil, err
 	}
-	defer file.Close()
-
-	encoder := gob.NewEncoder(file)
-	return encoder.Encode(bf)
+	return buf.Bytes(), nil
 }
 
-// Deserialize loads the Bloom filter from a file.
-func (bf *BloomFilter) Deserialize(filename string) error {
-	file, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	decoder := gob.NewDecoder(file)
+// DeserializeFromBytes deserializes the Bloom filter from a byte slice.
+func (bf *BloomFilter) DeserializeFromBytes(data []byte) error {
+	buf := bytes.NewBuffer(data)
+	decoder := gob.NewDecoder(buf)
 	return decoder.Decode(bf)
 }

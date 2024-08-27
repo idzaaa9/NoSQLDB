@@ -1,11 +1,11 @@
 package pds
 
 import (
+	"bytes"
 	"encoding/gob"
 	"hash/fnv"
 	"math"
 	"math/bits"
-	"os"
 )
 
 const (
@@ -88,28 +88,26 @@ func (hll *HLL) EmptyCount() int {
 	return sum
 }
 
-// Serialize serializes the HyperLogLog structure to a file.
-func (hll *HLL) Serialize(filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
+// SerializeToBytes serializes the HyperLogLog structure and returns a byte slice.
+func (hll *HLL) SerializeToBytes() ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	if err := encoder.Encode(hll); err != nil {
+		return nil, err
 	}
-	defer file.Close()
-	encoder := gob.NewEncoder(file)
-	return encoder.Encode(hll)
+	return buf.Bytes(), nil
 }
 
-// DeserializeHLL deserializes the HyperLogLog structure from a file.
-func DeserializeHLL(filename string) (*HLL, error) {
-	file, err := os.Open(filename)
+// DeserializeHLLFromBytes deserializes the HyperLogLog structure from a byte slice.
+func DeserializeHLLFromBytes(data []byte) (*HLL, error) {
+	buf := bytes.NewBuffer(data)
+	decoder := gob.NewDecoder(buf)
+	var hll HLL
+	err := decoder.Decode(&hll)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-	var hll HLL
-	decoder := gob.NewDecoder(file)
-	err = decoder.Decode(&hll)
-	return &hll, err
+	return &hll, nil
 }
 
 // Delete deletes the HyperLogLog instance by setting its registers to nil.

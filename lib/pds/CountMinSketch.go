@@ -2,8 +2,8 @@ package pds
 
 import (
 	"NoSQLDB/lib/utils"
+	"bytes"
 	"encoding/gob"
-	"os"
 )
 
 // CountMinSketch represents the Count-min sketch data structure
@@ -54,38 +54,25 @@ func (cms *CountMinSketch) Count(data []byte) int {
 	return minCount
 }
 
-// Serialize saves the Count-min sketch to a file
-func (cms *CountMinSketch) Serialize(filename string) error {
-	file, err := os.Create(filename) // Create a file to save the data
-	if err != nil {
-		return err
+// SerializeToBytes serializes the Count-min sketch and returns a byte slice.
+func (cms *CountMinSketch) SerializeToBytes() ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	if err := encoder.Encode(cms); err != nil {
+		return nil, err
 	}
-	defer file.Close()
-
-	encoder := gob.NewEncoder(file)
-	err = encoder.Encode(cms) // Encode the Count-min sketch into the file
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return buf.Bytes(), nil
 }
 
-// DeserializeCMS loads the Count-min sketch from a file
-func DeserializeCMS(filename string) (*CountMinSketch, error) {
-	file, err := os.Open(filename) // Open the file to read the data
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
+// DeserializeCMSFromBytes deserializes the Count-min sketch from a byte slice.
+func DeserializeCMSFromBytes(data []byte) (*CountMinSketch, error) {
+	buf := bytes.NewBuffer(data)
+	decoder := gob.NewDecoder(buf)
 	var cms CountMinSketch
-	decoder := gob.NewDecoder(file)
-	err = decoder.Decode(&cms) // Decode the data into a Count-min sketch
+	err := decoder.Decode(&cms)
 	if err != nil {
 		return nil, err
 	}
-
 	return &cms, nil
 }
 

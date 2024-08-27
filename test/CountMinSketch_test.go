@@ -3,7 +3,6 @@ package test
 import (
 	"NoSQLDB/lib/pds"
 	"NoSQLDB/lib/utils"
-	"os"
 	"testing"
 )
 
@@ -72,16 +71,14 @@ func TestSerializeDeserialize(t *testing.T) {
 	data := []byte("example")
 	cms.Insert(data)
 
-	// Serialize to file
-	filename := "cms_test.gob"
-	err := cms.Serialize(filename)
+	// Serialize to bytes
+	serializedBytes, err := cms.SerializeToBytes()
 	if err != nil {
 		t.Fatalf("Failed to serialize: %v", err)
 	}
-	defer os.Remove(filename) // Clean up the file after test
 
-	// Deserialize from file
-	deserializedCMS, err := pds.DeserializeCMS(filename)
+	// Deserialize from bytes
+	deserializedCMS, err := pds.DeserializeCMSFromBytes(serializedBytes)
 	if err != nil {
 		t.Fatalf("Failed to deserialize: %v", err)
 	}

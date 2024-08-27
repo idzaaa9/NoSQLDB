@@ -3,7 +3,6 @@ package test
 import (
 	"NoSQLDB/lib/pds"
 	"NoSQLDB/lib/utils"
-	"os"
 	"testing"
 )
 
@@ -36,16 +35,15 @@ func TestBloomFilter_SerializeAndDeserialize(t *testing.T) {
 	bf.Add("example")
 	bf.Add("test")
 
-	// Serialize
-	err := bf.Serialize("bloom_filter_test.gob")
+	// Serialize to bytes
+	serializedBytes, err := bf.SerializeToBytes()
 	if err != nil {
 		t.Fatalf("Failed to serialize Bloom filter: %v", err)
 	}
-	defer os.Remove("bloom_filter_test.gob")
 
-	// Deserialize
+	// Deserialize from bytes
 	newBf := &pds.BloomFilter{}
-	err = newBf.Deserialize("bloom_filter_test.gob")
+	err = newBf.DeserializeFromBytes(serializedBytes)
 	if err != nil {
 		t.Fatalf("Failed to deserialize Bloom filter: %v", err)
 	}

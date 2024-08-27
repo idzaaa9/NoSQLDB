@@ -3,7 +3,6 @@ package test
 import (
 	"NoSQLDB/lib/pds"
 	"fmt"
-	"os"
 	"testing"
 )
 
@@ -32,7 +31,7 @@ func TestAddAndEstimate(t *testing.T) {
 	}
 }
 
-func TestSerializeAndDeserialize(t *testing.T) {
+func TestSerializeDeserializeHLL(t *testing.T) {
 	hll := pds.NewHLL(10)
 	for i := 0; i < 15; i++ {
 		hll.Add("blue")
@@ -50,14 +49,14 @@ func TestSerializeAndDeserialize(t *testing.T) {
 		hll.Add("orange")
 	}
 
-	// Serialize
-	err := hll.Serialize("hll_data_test.gob")
+	// Serialize to bytes
+	serializedBytes, err := hll.SerializeToBytes()
 	if err != nil {
 		t.Fatalf("Error serializing: %v", err)
 	}
 
-	// Deserialize
-	hll2, err := pds.DeserializeHLL("hll_data_test.gob")
+	// Deserialize from bytes
+	hll2, err := pds.DeserializeHLLFromBytes(serializedBytes)
 	if err != nil {
 		t.Fatalf("Error deserializing: %v", err)
 	}
@@ -66,9 +65,6 @@ func TestSerializeAndDeserialize(t *testing.T) {
 	if estimated < 3 || estimated > 5 {
 		t.Errorf("Estimated number of unique elements after deserialization is out of expected range: %f", estimated)
 	}
-
-	// Clean up
-	os.Remove("hll_data_test.gob")
 }
 
 func TestDeleteHLL(t *testing.T) {

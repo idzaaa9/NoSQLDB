@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -59,23 +58,19 @@ func HammingDistance(a, b string) int {
 	return dist
 }
 
-// Function to save fingerprint to disk
-func SaveFingerprint(filename, fingerprint string) error {
+// SaveFingerprintToBytes serializes the fingerprint and returns a byte slice.
+func SaveFingerprintToBytes(fingerprint string) ([]byte, error) {
 	data, err := json.Marshal(fingerprint)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return os.WriteFile(filename, data, 0644)
+	return data, nil
 }
 
-// Function to load fingerprint from disk
-func LoadFingerprint(filename string) (string, error) {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return "", err
-	}
+// LoadFingerprintFromBytes deserializes the fingerprint from a byte slice.
+func LoadFingerprintFromBytes(data []byte) (string, error) {
 	var fingerprint string
-	err = json.Unmarshal(data, &fingerprint)
+	err := json.Unmarshal(data, &fingerprint)
 	return fingerprint, err
 }
 
