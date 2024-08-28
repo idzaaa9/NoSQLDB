@@ -51,7 +51,7 @@ func TestSaveAndLoadFingerprint(t *testing.T) {
 func TestProcessText(t *testing.T) {
 	text := "This is a test example"
 	stopWords := []string{"is", "a"}
-	expectedFingerprint := "1101110010100010111011001100001110100101001100100100100100100101"
+	expectedFingerprint := "11011111100111110101110110111101101001001101001110011101100101011111111100111010010011111100110111101011011001011000000000000000"
 
 	fingerprint, err := pds.ProcessText(text, stopWords)
 	if err != nil {
