@@ -2,20 +2,14 @@ package main
 
 import (
 	"NoSQLDB/lib/memtable"
-	"fmt"
-	"os"
 )
 
 func main() {
-	btm := memtable.NewBTreeMemtable(2, 10)
+	myMemtable := memtable.NewMapMemtable(100)
 
-	btm.Put("key1", []byte("value1"))
-	btm.Put("key2", []byte("value2"))
+	myMemtable.Put("picko", []byte("jfsd"))
+	myMemtable.Put("brt", []byte("jfsd"))
+	myMemtable.Put("alo", []byte("jfsd"))
 
-	err := btm.Flush()
-	if err != nil {
-		fmt.Printf("Greška pri pozivanju Flush(): %v\n", err)
-		os.Exit(1)
-	}
-
+	myMemtable.Flush()
 }
