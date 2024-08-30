@@ -1,6 +1,7 @@
 package memtable
 
 import (
+	"NoSQLDB/lib/merkle-tree"
 	"NoSQLDB/lib/pds"
 	"bytes"
 	"encoding/binary"
@@ -26,8 +27,10 @@ func NewSSWriter(outputDir string) (*SSWriter, error) {
 
 // if isSingleFile == false
 // add variable encoding
+// add compression
 func (wr *SSWriter) Flush(mt Memtable) error {
 	sortedKeys := mt.SortKeys()
+	binaryKeys := make([][]byte, 0)
 
 	fileNameData := fmt.Sprintf("usertable-%02d-Data.txt", wr.tableGen)
 	fileNameData = wr.outputDir + "/" + fileNameData
@@ -37,6 +40,8 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 	fileNameSummary = wr.outputDir + "/" + fileNameSummary
 	fileNameFilter := fmt.Sprintf("usertable-%02d-Filter.txt", wr.tableGen)
 	fileNameFilter = wr.outputDir + "/" + fileNameFilter
+	fileNameMetadata := fmt.Sprintf("usertable-%02d-Metadata.txt", wr.tableGen)
+	fileNameMetadata = wr.outputDir + "/" + fileNameMetadata
 
 	fileData, err := createFile(fileNameData)
 	if err != nil {
@@ -62,6 +67,12 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 	}
 	defer fileFilter.Close()
 
+	fileMeta, _ := createFile(fileNameMetadata)
+	if err != nil {
+		return err
+	}
+	defer fileFilter.Close()
+
 	offsetData := 0
 	offsetIndex := 0
 
@@ -74,6 +85,7 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 		wr.filter.Add(key)
 		entry, _ := mt.Get(key)
 		serializedEntry := entry.Serialize()
+		binaryKeys = append(binaryKeys, serializedEntry)
 
 		writeBytesToFile(serializedEntry, fileData)
 
@@ -114,6 +126,10 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 		return err
 	}
 	writeBytesToFile(serializedFilter, fileFilter)
+
+	metadata := merkle.BuildMerkleTree(binaryKeys)
+	serializedMetadata := merkle.SerializeMerkleTree(metadata)
+	writeBytesToFile(serializedMetadata, fileMeta)
 
 	return nil
 }
