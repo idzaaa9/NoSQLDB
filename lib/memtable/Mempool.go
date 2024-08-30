@@ -2,18 +2,17 @@ package memtable
 
 import (
 	"errors"
-	"os"
 )
 
 type Mempool struct {
-	tableCount      int
-	tables          []Memtable
-	activeTableIdx  int
-	outputDirectory string
+	tableCount     int
+	tables         []Memtable
+	activeTableIdx int
+	writer         SSWriter
 }
 
 func NewMempool(
-	numTables, memtableSize, skipListMaxLevel, BTreeMinDegree int, outputDir, memtableType string) (*Mempool, error) {
+	numTables, memtableSize, skipListMaxLevel, BTreeMinDegree int, writer SSWriter, memtableType string) (*Mempool, error) {
 	memtables := make([]Memtable, numTables)
 	var err error
 	for i := 0; i < numTables; i++ {
@@ -28,22 +27,12 @@ func NewMempool(
 			return nil, errors.New("invalid memtable type")
 		}
 	}
-	fileInfo, err := os.Stat(outputDir)
-	if err != nil {
-		err = os.Mkdir(outputDir, 0755)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if fileInfo == nil || !fileInfo.IsDir() {
-		return nil, errors.New("output directory is not a directory")
-	}
 
 	return &Mempool{
-		tableCount:      numTables,
-		tables:          memtables,
-		activeTableIdx:  0,
-		outputDirectory: outputDir,
+		tableCount:     numTables,
+		tables:         memtables,
+		activeTableIdx: 0,
+		writer:         writer,
 	}, err
 }
 
@@ -103,12 +92,12 @@ func (mp *Mempool) Put(entry *Entry) error {
 	}
 
 	if mp.tables[mp.activeTableIdx].IsFull() {
+		mp.rotateForward()
+
 		err = mp.flushIfNeeded()
 		if err != nil {
 			return err
 		}
-
-		mp.rotateForward()
 	}
 
 	return nil

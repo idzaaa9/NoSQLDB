@@ -11,5 +11,5 @@ func main() {
 	myMemtable.Put("brt", []byte("jfsd"))
 	myMemtable.Put("alo", []byte("jfsd"))
 
-	myMemtable.Flush()
+	//myMemtable.Flush()
 }

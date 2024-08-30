@@ -2,8 +2,6 @@ package memtable
 
 import (
 	"errors"
-	"fmt"
-	"os"
 	"sort"
 )
 
@@ -53,44 +51,12 @@ func (m *MapMemtable) IsFull() bool {
 	return m.Size() >= m.threshhold
 }
 
-func (m *MapMemtable) Flush() error {
-	entries := SortEntriesByKey(m)
-
-	fileCounter := 1
-	fileName := fmt.Sprintf("usertable-%02d-Data.txt", fileCounter)
-
-	for fileExists(fileName) {
-		fileCounter++
-		fileName = fmt.Sprintf("usertable-%02d-Data.txt", fileCounter)
+// promeniti da vraca sortirane kljuceve pa onda preko Get() ih serijalizovati i zapisivati
+func (memtable *MapMemtable) SortKeys() []string {
+	var keys []string
+	for key := range memtable.data {
+		keys = append(keys, key)
 	}
-
-	file, err := os.Create(fileName)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	for _, entry := range entries {
-		serializedData := entry.Serialize()
-		_, err := file.Write(serializedData)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func SortEntriesByKey(memtable *MapMemtable) []*Entry {
-	var sortedEntries []*Entry
-
-	for _, entry := range memtable.data {
-		sortedEntries = append(sortedEntries, &entry)
-	}
-
-	sort.Slice(sortedEntries, func(i, j int) bool {
-		return sortedEntries[i].key < sortedEntries[j].key
-	})
-
-	return sortedEntries
+	sort.Strings(keys)
+	return keys
 }

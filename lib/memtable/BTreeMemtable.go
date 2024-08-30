@@ -2,8 +2,7 @@ package memtable
 
 import (
 	"NoSQLDB/lib/btree"
-	"fmt"
-	"os"
+	"sort"
 )
 
 type BTreeMemtable struct {
@@ -36,39 +35,6 @@ func (btm *BTreeMemtable) Delete(key string) error {
 	return nil
 }
 
-func (btm *BTreeMemtable) Flush() error {
-	entries := btm.CollectKeyValuePairs()
-
-	fileCounter := 1
-	fileName := fmt.Sprintf("usertable-%02d-Data.txt", fileCounter)
-
-	for fileExists(fileName) {
-		fileCounter++
-		fileName = fmt.Sprintf("usertable-%02d-Data.txt", fileCounter)
-	}
-
-	file, err := os.Create(fileName)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	for _, entry := range entries {
-		serializedData := entry.Serialize()
-		_, err := file.Write(serializedData)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func fileExists(filename string) bool {
-	_, err := os.Stat(filename)
-	return !os.IsNotExist(err)
-}
-
 func (btm *BTreeMemtable) Size() int {
 	return btm.data.Size()
 }
@@ -85,28 +51,26 @@ func toEntry(be *btree.Entry) *Entry {
 	}
 }
 
-// CollectKeyValuePairs traverses the B-tree and returns key-value pairs sorted by keys.
-func (b *BTreeMemtable) CollectKeyValuePairs() []*btree.Entry {
-	var result []*btree.Entry
-	b.collectKeyValuePairsRecursive(b.data.Root(), &result)
-	return result
+func (b *BTreeMemtable) SortKeys() []string {
+	var keys []string
+	b.collectKeysRecursive(b.data.Root(), &keys)
+	sort.Strings(keys)
+	return keys
 }
 
-func (b *BTreeMemtable) collectKeyValuePairsRecursive(node *btree.Node, result *[]*btree.Entry) {
+func (b *BTreeMemtable) collectKeysRecursive(node *btree.Node, keys *[]string) {
 	if node == nil {
 		return
 	}
 
 	for i := 0; i < len(node.Keys()); i++ {
-		// Add the current key-value pair to the result
-		entry := node.Values()[i]
-		*result = append(*result, entry)
+		*keys = append(*keys, node.Keys()[i])
 	}
 
 	// Recursively process child nodes
 	if !node.IsLeaf() {
 		for i := 0; i < len(node.Children()); i++ {
-			b.collectKeyValuePairsRecursive(node.Children()[i], result)
+			b.collectKeysRecursive(node.Children()[i], keys)
 		}
 	}
 }
