@@ -35,18 +35,40 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 	fileNameIndex = wr.outputDir + "/" + fileNameIndex
 	fileNameSummary := fmt.Sprintf("usertable-%02d-Summary.txt", wr.tableGen)
 	fileNameSummary = wr.outputDir + "/" + fileNameSummary
+	fileNameFilter := fmt.Sprintf("usertable-%02d-Filter.txt", wr.tableGen)
+	fileNameFilter = wr.outputDir + "/" + fileNameFilter
 
-	fileData, _ := createFile(fileNameData)
+	fileData, err := createFile(fileNameData)
+	if err != nil {
+		return err
+	}
 	defer fileData.Close()
 
 	fileIndex, _ := createFile(fileNameIndex)
+	if err != nil {
+		return err
+	}
 	defer fileIndex.Close()
 
 	fileSummary, _ := createFile(fileNameSummary)
+	if err != nil {
+		return err
+	}
 	defer fileSummary.Close()
+
+	fileFilter, _ := createFile(fileNameFilter)
+	if err != nil {
+		return err
+	}
+	defer fileFilter.Close()
 
 	offsetData := 0
 	offsetIndex := 0
+
+	firstSerializedKey := make([]byte, 0)
+	lastSerializedKey := make([]byte, 0)
+	firstKeyOffsetIndex := 0
+	lastKeyOffsetIndex := 0
 
 	for i, key := range sortedKeys {
 		wr.filter.Add(key)
@@ -58,6 +80,14 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 		serializedKey, _ := serializeString(entry.Key())
 
 		if i%wr.indexStride == 0 {
+			if i == wr.indexStride-1 {
+				firstSerializedKey = serializedKey
+				firstKeyOffsetIndex = offsetIndex
+			} else if i == len(sortedKeys)-1 {
+				lastSerializedKey = serializedKey
+				lastKeyOffsetIndex = offsetIndex
+			}
+
 			writeBytesToFile(serializedKey, fileIndex)
 			writeOffsetToFile(offsetData, fileIndex)
 		}
@@ -73,6 +103,17 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 			offsetIndex += len(intToBinary(offsetData))
 		}
 	}
+
+	writeBytesToFile(firstSerializedKey, fileSummary)
+	writeBytesToFile(lastSerializedKey, fileSummary)
+	writeBytesToFile(intToBinary(firstKeyOffsetIndex), fileSummary)
+	writeBytesToFile(intToBinary(lastKeyOffsetIndex), fileSummary)
+
+	serializedFilter, err := wr.filter.SerializeToBytes()
+	if err != nil {
+		return err
+	}
+	writeBytesToFile(serializedFilter, fileFilter)
 
 	return nil
 }
