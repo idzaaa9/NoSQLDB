@@ -1,10 +1,14 @@
 package sstable
 
-import "NoSQLDB/lib/pds"
+import (
+	"NoSQLDB/lib/merkle-tree"
+	"NoSQLDB/lib/pds"
+)
 
 type DataBlock struct {
-	Key   string
-	Value []byte
+	Key       string
+	Value     []byte
+	Tombstone bool
 }
 
 type IndexEntry struct {
@@ -18,15 +22,11 @@ type SummaryEntry struct {
 	Offset   int64
 }
 
-type MetadataEntry struct {
-	// todo
-}
-
 type SSTable struct {
 	DataBlocks []DataBlock
 	Index      []IndexEntry
 	Summary    []SummaryEntry
 	Filter     pds.BloomFilter
 	TOC        []string
-	Metadata   MetadataEntry
+	Metadata   merkle.MerkleTree
 }

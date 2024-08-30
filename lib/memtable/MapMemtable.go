@@ -2,6 +2,7 @@ package memtable
 
 import (
 	"errors"
+	"sort"
 )
 
 type MapMemtable struct {
@@ -53,4 +54,18 @@ func (m *MapMemtable) IsFull() bool {
 // TODO: Implement this
 func (m *MapMemtable) Flush() error {
 	return nil
+}
+
+func SortEntriesByKey(memtable *MapMemtable) []*Entry {
+	var sortedEntries []*Entry
+
+	for _, entry := range memtable.data {
+		sortedEntries = append(sortedEntries, &entry)
+	}
+
+	sort.Slice(sortedEntries, func(i, j int) bool {
+		return sortedEntries[i].key < sortedEntries[j].key
+	})
+
+	return sortedEntries
 }

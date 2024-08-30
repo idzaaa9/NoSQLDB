@@ -1,5 +1,7 @@
 package btree
 
+import "encoding/binary"
+
 type Entry struct {
 	key       string
 	value     []byte
@@ -25,6 +27,22 @@ type Node struct {
 	isLeaf   bool
 }
 
+func (n *Node) Keys() []string {
+	return n.keys
+}
+
+func (n *Node) Values() []*Entry {
+	return n.values
+}
+
+func (n *Node) Children() []*Node {
+	return n.children
+}
+
+func (n *Node) IsLeaf() bool {
+	return n.isLeaf
+}
+
 func NewNode(minDegree int, isLeaf bool) *Node {
 	return &Node{
 		keys:     make([]string, 0, 2*minDegree-1),
@@ -38,6 +56,10 @@ type BTree struct {
 	root      *Node
 	minDegree int
 	size      int
+}
+
+func (bt *BTree) Root() *Node {
+	return bt.root
 }
 
 func NewBTree(minDegree int) *BTree {
@@ -151,4 +173,28 @@ func (b *BTree) putNotFull(node *Node, key string, value []byte, tombstone bool)
 
 func (b *BTree) Size() int {
 	return b.size
+}
+
+func (e *Entry) Serialize() []byte {
+	tombstone := make([]byte, TOMBSTONE_SIZE)
+
+	keysize := make([]byte, KEY_SIZE_SIZE)
+	binary.LittleEndian.PutUint32(keysize, uint32(len(e.key)))
+
+	if e.tombstone {
+		tombstone[0] = 1
+		data := append(tombstone, keysize...)
+		return append(data, []byte(e.key)...)
+	} else {
+		tombstone[0] = 0
+	}
+
+	valuesize := make([]byte, VALUE_SIZE_SIZE)
+	binary.LittleEndian.PutUint32(valuesize, uint32(len(e.value)))
+
+	data := append(tombstone, keysize...)
+	data = append(data, []byte(e.key)...)
+
+	data = append(data, valuesize...)
+	return append(data, []byte(e.value)...)
 }
