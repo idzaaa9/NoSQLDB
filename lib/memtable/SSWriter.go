@@ -14,20 +14,25 @@ type SSWriter struct {
 	tableGen      int
 	isSingleFile  bool
 	isCompressed  bool
-	filter        pds.BloomFilter
+	filter        *pds.BloomFilter
 	indexStride   int
 	summaryStride int
 }
 
-func NewSSWriter(outputDir string) (*SSWriter, error) {
+func NewSSWriter(outputDir string, tableGen, indexStride, summaryStride int, isSingleFile, isCompressed bool, filter *pds.BloomFilter) (*SSWriter, error) {
 	return &SSWriter{
-		outputDir: outputDir,
+		outputDir:     outputDir,
+		tableGen:      tableGen,
+		isSingleFile:  isSingleFile,
+		isCompressed:  isCompressed,
+		filter:        filter,
+		indexStride:   indexStride,
+		summaryStride: summaryStride * indexStride,
 	}, nil
 }
 
-// if isSingleFile == false
+// if isSingleFile == false && isCompressed == false
 // add variable encoding
-// add compression
 func (wr *SSWriter) Flush(mt Memtable) error {
 	sortedKeys := mt.SortKeys()
 	binaryKeys := make([][]byte, 0)

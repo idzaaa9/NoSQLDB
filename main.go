@@ -2,6 +2,7 @@ package main
 
 import (
 	"NoSQLDB/lib/memtable"
+	"NoSQLDB/lib/pds"
 )
 
 func main() {
@@ -11,5 +12,12 @@ func main() {
 	myMemtable.Put("brt", []byte("jfsd"))
 	myMemtable.Put("alo", []byte("jfsd"))
 
-	//myMemtable.Flush()
+	filter := pds.NewBloomFilter(10, 3)
+
+	writer, err := memtable.NewSSWriter("tmp", 1, 3, 5, false, false, filter)
+	if err != nil {
+		panic(err)
+	}
+
+	writer.Flush(myMemtable)
 }

@@ -64,7 +64,7 @@ func (mp *Mempool) Get(key string) (*Entry, error) {
 
 		return true
 	}
-*/
+
 func (mp *Mempool) shouldFlush() bool {
 	for i := 0; i < mp.tableCount; i++ {
 		if !mp.tables[i].IsFull() {
@@ -103,6 +103,7 @@ func (mp *Mempool) Put(entry *Entry) error {
 	return nil
 }
 
+
 // logical delete
 func (mp *Mempool) Delete(key string) error {
 	err := mp.Put(&Entry{key, nil, true})
@@ -121,3 +122,4 @@ func (mp *Mempool) Delete(key string) error {
 
 	return nil
 }
+*/
