@@ -1,6 +1,7 @@
 package memtable
 
 import (
+	sm "NoSQLDB/lib/segment-manager"
 	"errors"
 	"os"
 )
@@ -10,6 +11,7 @@ type Mempool struct {
 	tables          []Memtable
 	activeTableIdx  int
 	outputDirectory string
+	segmentManager  *sm.SegmentManager
 }
 
 func NewMempool(
@@ -44,6 +46,7 @@ func NewMempool(
 		tables:          memtables,
 		activeTableIdx:  0,
 		outputDirectory: outputDir,
+		segmentManager:  sm.GetInstance(outputDir),
 	}, err
 }
 
@@ -97,6 +100,7 @@ func (mp *Mempool) flushIfNeeded() error {
 
 func (mp *Mempool) Put(entry *Entry) error {
 	err := mp.tables[mp.activeTableIdx].Put(entry.Key(), entry.Value())
+	mp.segmentManager.AddTableIdx(mp.activeTableIdx)
 
 	if err != nil {
 		return err
@@ -107,6 +111,8 @@ func (mp *Mempool) Put(entry *Entry) error {
 		if err != nil {
 			return err
 		}
+		mp.segmentManager.RemoveTableIdx(mp.activeTableIdx)
+		mp.segmentManager.DeleteSafeSegments()
 
 		mp.rotateForward()
 	}
