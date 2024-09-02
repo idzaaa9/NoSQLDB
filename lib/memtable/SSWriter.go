@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -72,7 +73,7 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 	}
 	defer fileFilter.Close()
 
-	fileMeta, _ := createFile(fileNameMetadata)
+	fileMetadata, _ := createFile(fileNameMetadata)
 	if err != nil {
 		return err
 	}
@@ -134,7 +135,93 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 
 	metadata := merkle.BuildMerkleTree(binaryKeys)
 	serializedMetadata := merkle.SerializeMerkleTree(metadata)
-	writeBytesToFile(serializedMetadata, fileMeta)
+	writeBytesToFile(serializedMetadata, fileMetadata)
+
+	if wr.isSingleFile {
+		mergedFileName := fmt.Sprintf("usertable-%02d.txt", wr.tableGen)
+		mergedFileName = wr.outputDir + "/" + mergedFileName
+		mergedFile, err := createFile(mergedFileName)
+		if err != nil {
+			return err
+		}
+		defer mergedFile.Close()
+
+		segmentOffsetsFileName := wr.outputDir + "/" + "segmentOffsets.txt"
+		segmentOffsetsFile, err := createFile(segmentOffsetsFileName)
+		if err != nil {
+			return err
+		}
+		defer segmentOffsetsFile.Close()
+
+		fileData, err := os.OpenFile(fileNameData, os.O_RDWR, 0666)
+		if err != nil {
+			return err
+		}
+		defer fileData.Close()
+
+		fileIndex, err := os.OpenFile(fileNameIndex, os.O_RDWR, 0666)
+		if err != nil {
+			return err
+		}
+		defer fileIndex.Close()
+
+		fileSummary, err := os.OpenFile(fileNameSummary, os.O_RDWR, 0666)
+		if err != nil {
+			return err
+		}
+		defer fileSummary.Close()
+
+		fileFilter, err := os.OpenFile(fileNameFilter, os.O_RDWR, 0666)
+		if err != nil {
+			return err
+		}
+		defer fileFilter.Close()
+
+		fileMetadata, err := os.OpenFile(fileNameMetadata, os.O_RDWR, 0666)
+		if err != nil {
+			return err
+		}
+		defer fileMetadata.Close()
+
+		segmentOffsetsFile.WriteString("Data: 0\n")
+		copyFileContents(fileData, mergedFile)
+		currentOffset, err := mergedFile.Seek(0, io.SeekEnd)
+		if err != nil {
+			return err
+		}
+		segmentOffsetsFile.WriteString(fmt.Sprint("Index: %d\n", currentOffset))
+		copyFileContents(fileIndex, mergedFile)
+		currentOffset, err = mergedFile.Seek(0, io.SeekEnd)
+		if err != nil {
+			return err
+		}
+		segmentOffsetsFile.WriteString(fmt.Sprint("Summary: %d\n", currentOffset))
+		copyFileContents(fileSummary, mergedFile)
+		currentOffset, err = mergedFile.Seek(0, io.SeekEnd)
+		if err != nil {
+			return err
+		}
+		segmentOffsetsFile.WriteString(fmt.Sprint("Filter: %d\n", currentOffset))
+		copyFileContents(fileFilter, mergedFile)
+		currentOffset, err = mergedFile.Seek(0, io.SeekEnd)
+		if err != nil {
+			return err
+		}
+		segmentOffsetsFile.WriteString(fmt.Sprint("Metadata: %d\n", currentOffset))
+		copyFileContents(fileMetadata, mergedFile)
+
+		fileData.Close()
+		fileIndex.Close()
+		fileSummary.Close()
+		fileFilter.Close()
+		fileMetadata.Close()
+
+		deleteFile(fileNameData)
+		deleteFile(fileNameIndex)
+		deleteFile(fileNameSummary)
+		deleteFile(fileNameFilter)
+		deleteFile(fileNameMetadata)
+	}
 
 	return nil
 }
@@ -180,4 +267,35 @@ func serializeString(s string) ([]byte, error) {
 	}
 	buf.WriteString(s)
 	return buf.Bytes(), nil
+}
+
+func copyFileContents(src, dst *os.File) error {
+	const bufferSize = 4096
+
+	buffer := make([]byte, bufferSize)
+	for {
+		n, err := src.Read(buffer)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		_, err = dst.Write(buffer[:n])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func deleteFile(fileName string) error {
+	err := os.Remove(fileName)
+	if err != nil {
+		return fmt.Errorf("error deleting file %s: %v", fileName, err)
+	}
+	fmt.Printf("File %s successfully deleted.\n", fileName)
+	return nil
 }

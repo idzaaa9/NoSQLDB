@@ -36,6 +36,7 @@ func NewMempool(
 	}, err
 }
 
+/*
 func (mp *Mempool) rotateForward() {
 	mp.activeTableIdx = (mp.activeTableIdx + 1) % mp.tableCount
 }
@@ -51,7 +52,7 @@ func (mp *Mempool) Get(key string) (*Entry, error) {
 	return nil, errors.New("entry not found")
 }
 
-/*
+
 	func (mp *Mempool) Exists(key string) (bool, int) {
 		for i := 0; i < mp.tableCount; i++ {
 			tableIdx := (mp.activeTableIdx - i + mp.tableCount) % mp.tableCount // the addition makes sure we dont get negative numbers

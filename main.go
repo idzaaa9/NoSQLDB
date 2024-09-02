@@ -14,7 +14,7 @@ func main() {
 
 	filter := pds.NewBloomFilter(10, 3)
 
-	writer, err := memtable.NewSSWriter("tmp", 1, 3, 5, false, false, filter)
+	writer, err := memtable.NewSSWriter("tmp", 1, 3, 5, true, false, filter)
 	if err != nil {
 		panic(err)
 	}
