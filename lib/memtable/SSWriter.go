@@ -32,7 +32,7 @@ func NewSSWriter(outputDir string, tableGen, indexStride, summaryStride int, isS
 	}, nil
 }
 
-// if isSingleFile == false && isCompressed == false
+// isCompressed == false
 // add variable encoding
 func (wr *SSWriter) Flush(mt Memtable) error {
 	sortedKeys := mt.SortKeys()
@@ -49,35 +49,35 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 	fileNameMetadata := fmt.Sprintf("usertable-%02d-Metadata.txt", wr.tableGen)
 	fileNameMetadata = wr.outputDir + "/" + fileNameMetadata
 
-	fileData, err := createFile(fileNameData)
+	fileData, err := os.Create(fileNameData)
 	if err != nil {
 		return err
 	}
 	defer fileData.Close()
 
-	fileIndex, _ := createFile(fileNameIndex)
+	fileIndex, err := os.Create(fileNameIndex)
 	if err != nil {
 		return err
 	}
 	defer fileIndex.Close()
 
-	fileSummary, _ := createFile(fileNameSummary)
+	fileSummary, err := os.Create(fileNameSummary)
 	if err != nil {
 		return err
 	}
 	defer fileSummary.Close()
 
-	fileFilter, _ := createFile(fileNameFilter)
+	fileFilter, err := os.Create(fileNameFilter)
 	if err != nil {
 		return err
 	}
 	defer fileFilter.Close()
 
-	fileMetadata, _ := createFile(fileNameMetadata)
+	fileMetadata, err := os.Create(fileNameMetadata)
 	if err != nil {
 		return err
 	}
-	defer fileFilter.Close()
+	defer fileMetadata.Close()
 
 	offsetData := 0
 	offsetIndex := 0
@@ -93,7 +93,10 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 		serializedEntry := entry.Serialize()
 		binaryKeys = append(binaryKeys, serializedEntry)
 
-		writeBytesToFile(serializedEntry, fileData)
+		_, err := fileData.Write(serializedEntry)
+		if err != nil {
+			return err
+		}
 
 		serializedKey, _ := serializeString(entry.Key())
 
@@ -106,13 +109,25 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 				lastKeyOffsetIndex = offsetIndex
 			}
 
-			writeBytesToFile(serializedKey, fileIndex)
-			writeOffsetToFile(offsetData, fileIndex)
+			_, err := fileIndex.Write(serializedKey)
+			if err != nil {
+				return err
+			}
+			err = writeOffsetToFile(offsetData, fileIndex)
+			if err != nil {
+				return err
+			}
 		}
 
 		if i%wr.summaryStride == 0 {
-			writeBytesToFile(serializedKey, fileSummary)
-			writeOffsetToFile(offsetIndex, fileIndex)
+			_, err := fileSummary.Write(serializedKey)
+			if err != nil {
+				return err
+			}
+			err = writeOffsetToFile(offsetIndex, fileSummary)
+			if err != nil {
+				return err
+			}
 		}
 
 		offsetData += len(serializedEntry)
@@ -122,32 +137,50 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 		}
 	}
 
-	writeBytesToFile(firstSerializedKey, fileSummary)
-	writeBytesToFile(lastSerializedKey, fileSummary)
-	writeBytesToFile(intToBinary(firstKeyOffsetIndex), fileSummary)
-	writeBytesToFile(intToBinary(lastKeyOffsetIndex), fileSummary)
+	_, err = fileSummary.Write(firstSerializedKey)
+	if err != nil {
+		return err
+	}
+	_, err = fileSummary.Write(lastSerializedKey)
+	if err != nil {
+		return err
+	}
+	_, err = fileSummary.Write(intToBinary(firstKeyOffsetIndex))
+	if err != nil {
+		return err
+	}
+	_, err = fileSummary.Write(intToBinary(lastKeyOffsetIndex))
+	if err != nil {
+		return err
+	}
 
 	serializedFilter, err := wr.filter.SerializeToBytes()
 	if err != nil {
 		return err
 	}
-	writeBytesToFile(serializedFilter, fileFilter)
+	_, err = fileFilter.Write(serializedFilter)
+	if err != nil {
+		return err
+	}
 
 	metadata := merkle.BuildMerkleTree(binaryKeys)
 	serializedMetadata := merkle.SerializeMerkleTree(metadata)
-	writeBytesToFile(serializedMetadata, fileMetadata)
+	_, err = fileMetadata.Write(serializedMetadata)
+	if err != nil {
+		return err
+	}
 
 	if wr.isSingleFile {
 		mergedFileName := fmt.Sprintf("usertable-%02d.txt", wr.tableGen)
 		mergedFileName = wr.outputDir + "/" + mergedFileName
-		mergedFile, err := createFile(mergedFileName)
+		mergedFile, err := os.Create(mergedFileName)
 		if err != nil {
 			return err
 		}
 		defer mergedFile.Close()
 
 		segmentOffsetsFileName := wr.outputDir + "/" + "segmentOffsets.txt"
-		segmentOffsetsFile, err := createFile(segmentOffsetsFileName)
+		segmentOffsetsFile, err := os.Create(segmentOffsetsFileName)
 		if err != nil {
 			return err
 		}
@@ -189,25 +222,25 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 		if err != nil {
 			return err
 		}
-		segmentOffsetsFile.WriteString(fmt.Sprint("Index: %d\n", currentOffset))
+		segmentOffsetsFile.WriteString(fmt.Sprint("Index: ", currentOffset, "\n"))
 		copyFileContents(fileIndex, mergedFile)
 		currentOffset, err = mergedFile.Seek(0, io.SeekEnd)
 		if err != nil {
 			return err
 		}
-		segmentOffsetsFile.WriteString(fmt.Sprint("Summary: %d\n", currentOffset))
+		segmentOffsetsFile.WriteString(fmt.Sprint("Summary: ", currentOffset, "\n"))
 		copyFileContents(fileSummary, mergedFile)
 		currentOffset, err = mergedFile.Seek(0, io.SeekEnd)
 		if err != nil {
 			return err
 		}
-		segmentOffsetsFile.WriteString(fmt.Sprint("Filter: %d\n", currentOffset))
+		segmentOffsetsFile.WriteString(fmt.Sprint("Filter: ", currentOffset, "\n"))
 		copyFileContents(fileFilter, mergedFile)
 		currentOffset, err = mergedFile.Seek(0, io.SeekEnd)
 		if err != nil {
 			return err
 		}
-		segmentOffsetsFile.WriteString(fmt.Sprint("Metadata: %d\n", currentOffset))
+		segmentOffsetsFile.WriteString(fmt.Sprint("Metadata: ", currentOffset, "\n"))
 		copyFileContents(fileMetadata, mergedFile)
 
 		fileData.Close()
@@ -216,29 +249,28 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 		fileFilter.Close()
 		fileMetadata.Close()
 
-		deleteFile(fileNameData)
-		deleteFile(fileNameIndex)
-		deleteFile(fileNameSummary)
-		deleteFile(fileNameFilter)
-		deleteFile(fileNameMetadata)
+		err = os.Remove(fileNameData)
+		if err != nil {
+			return err
+		}
+		err = os.Remove(fileNameIndex)
+		if err != nil {
+			return err
+		}
+		err = os.Remove(fileNameSummary)
+		if err != nil {
+			return err
+		}
+		err = os.Remove(fileNameFilter)
+		if err != nil {
+			return err
+		}
+		err = os.Remove(fileNameMetadata)
+		if err != nil {
+			return err
+		}
 	}
 
-	return nil
-}
-
-func createFile(fileName string) (*os.File, error) {
-	file, err := os.Create(fileName)
-	if err != nil {
-		return nil, err
-	}
-	return file, nil
-}
-
-func writeBytesToFile(serializedEntry []byte, file *os.File) error {
-	_, err := file.Write(serializedEntry)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -288,14 +320,5 @@ func copyFileContents(src, dst *os.File) error {
 		}
 	}
 
-	return nil
-}
-
-func deleteFile(fileName string) error {
-	err := os.Remove(fileName)
-	if err != nil {
-		return fmt.Errorf("error deleting file %s: %v", fileName, err)
-	}
-	fmt.Printf("File %s successfully deleted.\n", fileName)
 	return nil
 }

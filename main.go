@@ -20,4 +20,8 @@ func main() {
 	}
 
 	writer.Flush(myMemtable)
+	// var a int64
+	// a = 366
+	// s := fmt.Sprint("a: ", a)
+	// fmt.Println(s)
 }
