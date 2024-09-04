@@ -23,16 +23,19 @@ func (e *Entry) Tombstone() bool {
 func (e *Entry) Serialize() []byte {
 	// Tombstone
 	tombstone := make([]byte, TOMBSTONE_SIZE)
-	if e.tombstone {
-		tombstone[0] = 1
-	} else {
-		tombstone[0] = 0
-	}
 
 	// Key
 	keyLen := uint32(len(e.key))
 	keyLenBytes := make([]byte, binary.MaxVarintLen32)
 	n := binary.PutUvarint(keyLenBytes, uint64(keyLen))
+
+	if e.tombstone {
+		tombstone[0] = 1
+		data := append(tombstone, keyLenBytes[:n]...)
+		return append(data, []byte(e.key)...)
+	} else {
+		tombstone[0] = 0
+	}
 
 	// Value
 	valueLen := uint32(len(e.value))

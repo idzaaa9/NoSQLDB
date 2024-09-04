@@ -1,7 +1,5 @@
 package btree
 
-import "encoding/binary"
-
 type Entry struct {
 	key       string
 	value     []byte
@@ -173,28 +171,4 @@ func (b *BTree) putNotFull(node *Node, key string, value []byte, tombstone bool)
 
 func (b *BTree) Size() int {
 	return b.size
-}
-
-func (e *Entry) Serialize() []byte {
-	tombstone := make([]byte, TOMBSTONE_SIZE)
-
-	keysize := make([]byte, KEY_SIZE_SIZE)
-	binary.LittleEndian.PutUint32(keysize, uint32(len(e.key)))
-
-	if e.tombstone {
-		tombstone[0] = 1
-		data := append(tombstone, keysize...)
-		return append(data, []byte(e.key)...)
-	} else {
-		tombstone[0] = 0
-	}
-
-	valuesize := make([]byte, VALUE_SIZE_SIZE)
-	binary.LittleEndian.PutUint32(valuesize, uint32(len(e.value)))
-
-	data := append(tombstone, keysize...)
-	data = append(data, []byte(e.key)...)
-
-	data = append(data, valuesize...)
-	return append(data, []byte(e.value)...)
 }

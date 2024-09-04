@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 )
 
 type SSWriter struct {
@@ -21,6 +22,14 @@ type SSWriter struct {
 }
 
 func NewSSWriter(outputDir string, tableGen, indexStride, summaryStride int, isSingleFile, isCompressed bool, filter *pds.BloomFilter) (*SSWriter, error) {
+	if isCompressed {
+		fileNameDictionary := outputDir + "/dictionary.txt"
+		fileDictionary, err := os.Create(fileNameDictionary)
+		if err != nil {
+			return nil, err
+		}
+		defer fileDictionary.Close()
+	}
 	return &SSWriter{
 		outputDir:     outputDir,
 		tableGen:      tableGen,
@@ -32,8 +41,6 @@ func NewSSWriter(outputDir string, tableGen, indexStride, summaryStride int, isS
 	}, nil
 }
 
-// isCompressed == false
-// add variable encoding
 func (wr *SSWriter) Flush(mt Memtable) error {
 	sortedKeys := mt.SortKeys()
 	binaryKeys := make([][]byte, 0)
@@ -87,18 +94,35 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 	firstKeyOffsetIndex := 0
 	lastKeyOffsetIndex := 0
 
+	compressionCounter := 1
+
 	for i, key := range sortedKeys {
 		wr.filter.Add(key)
-		entry, _ := mt.Get(key)
-		serializedEntry := entry.Serialize()
-		binaryKeys = append(binaryKeys, serializedEntry)
-
-		_, err := fileData.Write(serializedEntry)
+		entry, err := mt.Get(key)
 		if err != nil {
 			return err
 		}
 
-		serializedKey, _ := serializeString(entry.Key())
+		if wr.isCompressed {
+			keyNumeric, err := wr.keyTransformation(entry.key, &compressionCounter)
+			if err != nil {
+				return err
+			}
+			entry.key = strconv.Itoa(keyNumeric)
+		}
+
+		serializedEntry := entry.Serialize()
+		binaryKeys = append(binaryKeys, serializedEntry)
+
+		_, err = fileData.Write(serializedEntry)
+		if err != nil {
+			return err
+		}
+
+		serializedKey, err := serializeString(entry.Key())
+		if err != nil {
+			return err
+		}
 
 		if i%wr.indexStride == 0 {
 			if i == wr.indexStride-1 {
@@ -321,4 +345,87 @@ func copyFileContents(src, dst *os.File) error {
 	}
 
 	return nil
+}
+
+func (wr *SSWriter) keyTransformation(key string, counter *int) (int, error) {
+	fileNameDictionary := wr.outputDir + "/dictionary.txt"
+	fileDict, err := os.OpenFile(fileNameDictionary, os.O_RDWR, 0666)
+	if err != nil {
+		return 0, err
+	}
+	defer fileDict.Close()
+
+	exists, offset, err := checkBytesInFile(fileDict, []byte(key))
+	if err != nil {
+		return 0, err
+	}
+
+	if !exists {
+		fileDict.Write(intToBinary(len([]byte(key))))
+		fileDict.Write([]byte(key))
+		fileDict.Write(intToBinary(*counter))
+		*counter++
+		return *counter - 1, nil
+	} else {
+		fileDict.Seek(offset, 0)
+		numericValue, err := readFromDictionary(fileDict)
+		if err != nil {
+			return 0, err
+		}
+		return numericValue, nil
+	}
+}
+
+func checkBytesInFile(file *os.File, targetBytes []byte) (bool, int64, error) {
+	buffer := make([]byte, len(targetBytes))
+	var position int64
+
+	for {
+		n, err := file.Read(buffer)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return false, 0, err
+		}
+
+		if n >= len(targetBytes) && bytesEqual(buffer[:len(targetBytes)], targetBytes) {
+			return true, position, nil
+		}
+
+		position += int64(n)
+	}
+
+	return false, 0, nil
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func readFromDictionary(fileDict *os.File) (int, error) {
+	var keyLen uint64
+	if err := binary.Read(fileDict, binary.LittleEndian, &keyLen); err != nil {
+		return 0, err
+	}
+
+	keyBytes := make([]byte, keyLen)
+	if _, err := fileDict.Read(keyBytes); err != nil {
+		return 0, err
+	}
+
+	var numericValue int
+	if err := binary.Read(fileDict, binary.LittleEndian, &numericValue); err != nil {
+		return 0, err
+	}
+
+	return numericValue, nil
 }
