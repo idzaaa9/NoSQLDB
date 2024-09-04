@@ -133,22 +133,14 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 				lastKeyOffsetIndex = offsetIndex
 			}
 
-			_, err := fileIndex.Write(serializedKey)
-			if err != nil {
-				return err
-			}
-			err = writeOffsetToFile(offsetData, fileIndex)
+			_, err := fileIndex.Write(append(serializedKey, intToBinary(offsetData)...))
 			if err != nil {
 				return err
 			}
 		}
 
 		if i%wr.summaryStride == 0 {
-			_, err := fileSummary.Write(serializedKey)
-			if err != nil {
-				return err
-			}
-			err = writeOffsetToFile(offsetIndex, fileSummary)
+			_, err := fileSummary.Write(append(serializedKey, intToBinary(offsetIndex)...))
 			if err != nil {
 				return err
 			}
@@ -161,19 +153,11 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 		}
 	}
 
-	_, err = fileSummary.Write(firstSerializedKey)
+	_, err = fileSummary.Write(append(firstSerializedKey, lastSerializedKey...))
 	if err != nil {
 		return err
 	}
-	_, err = fileSummary.Write(lastSerializedKey)
-	if err != nil {
-		return err
-	}
-	_, err = fileSummary.Write(intToBinary(firstKeyOffsetIndex))
-	if err != nil {
-		return err
-	}
-	_, err = fileSummary.Write(intToBinary(lastKeyOffsetIndex))
+	_, err = fileSummary.Write(append(intToBinary(firstKeyOffsetIndex), intToBinary(lastKeyOffsetIndex)...))
 	if err != nil {
 		return err
 	}
@@ -298,17 +282,6 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 	return nil
 }
 
-func writeOffsetToFile(offset int, file *os.File) error {
-	binaryOffset := intToBinary(offset)
-
-	_, err := file.Write(binaryOffset)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func intToBinary(n int) []byte {
 	binaryData := make([]byte, binary.MaxVarintLen64)
 	binary.PutVarint(binaryData, int64(n))
@@ -368,7 +341,7 @@ func (wr *SSWriter) keyTransformation(key string, counter *int) (int, error) {
 		return *counter - 1, nil
 	} else {
 		fileDict.Seek(offset, 0)
-		numericValue, err := readFromDictionary(fileDict)
+		numericValue, err := readNumFromDict(fileDict)
 		if err != nil {
 			return 0, err
 		}
@@ -411,7 +384,7 @@ func bytesEqual(a, b []byte) bool {
 	return true
 }
 
-func readFromDictionary(fileDict *os.File) (int, error) {
+func readNumFromDict(fileDict *os.File) (int, error) {
 	var keyLen uint64
 	if err := binary.Read(fileDict, binary.LittleEndian, &keyLen); err != nil {
 		return 0, err

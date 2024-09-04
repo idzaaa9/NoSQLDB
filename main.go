@@ -8,20 +8,16 @@ import (
 func main() {
 	myMemtable := memtable.NewMapMemtable(100)
 
-	myMemtable.Put("picko", []byte("jfsd"))
-	myMemtable.Put("brt", []byte("jfsd"))
-	myMemtable.Put("alo", []byte("jfsd"))
+	myMemtable.Put("apple", []byte("red"))
+	myMemtable.Put("orange", []byte("orange"))
+	myMemtable.Put("banana", []byte("yellow"))
 
 	filter := pds.NewBloomFilter(10, 3)
 
-	writer, err := memtable.NewSSWriter("tmp", 1, 3, 5, true, false, filter)
+	writer, err := memtable.NewSSWriter("tmp", 1, 3, 5, true, true, filter)
 	if err != nil {
 		panic(err)
 	}
 
 	writer.Flush(myMemtable)
-	// var a int64
-	// a = 366
-	// s := fmt.Sprint("a: ", a)
-	// fmt.Println(s)
 }
