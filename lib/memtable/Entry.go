@@ -21,25 +21,29 @@ func (e *Entry) Tombstone() bool {
 }
 
 func (e *Entry) Serialize() []byte {
+	// Tombstone
 	tombstone := make([]byte, TOMBSTONE_SIZE)
-
-	keysize := make([]byte, KEY_SIZE_SIZE)
-	binary.LittleEndian.PutUint32(keysize, uint32(len(e.key)))
-
 	if e.tombstone {
 		tombstone[0] = 1
-		data := append(tombstone, keysize...)
-		return append(data, []byte(e.key)...)
 	} else {
 		tombstone[0] = 0
 	}
 
-	valuesize := make([]byte, VALUE_SIZE_SIZE)
-	binary.LittleEndian.PutUint32(valuesize, uint32(len(e.value)))
+	// Key
+	keyLen := uint32(len(e.key))
+	keyLenBytes := make([]byte, binary.MaxVarintLen32)
+	n := binary.PutUvarint(keyLenBytes, uint64(keyLen))
 
-	data := append(tombstone, keysize...)
+	// Value
+	valueLen := uint32(len(e.value))
+	valueLenBytes := make([]byte, binary.MaxVarintLen32)
+	m := binary.PutUvarint(valueLenBytes, uint64(valueLen))
+
+	// Construct the serialized data
+	data := append(tombstone, keyLenBytes[:n]...)
 	data = append(data, []byte(e.key)...)
+	data = append(data, valueLenBytes[:m]...)
+	data = append(data, []byte(e.value)...)
 
-	data = append(data, valuesize...)
-	return append(data, []byte(e.value)...)
+	return data
 }
