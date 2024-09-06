@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 type SSWriter struct {
@@ -110,14 +111,19 @@ func (wr *SSWriter) Flush(mt Memtable) error {
 // intToBinary encodes an integer into its binary representation.
 // It returns a byte slice containing the binary data.
 func intToBinary(n int) []byte {
-	// Create a byte slice with enough capacity for the maximum varint length.
-	binaryData := make([]byte, binary.MaxVarintLen64)
+	// Encode the integer 'n' into a varint.
+	varintData := make([]byte, binary.MaxVarintLen64)
+	binary.PutVarint(varintData, int64(n))
 
-	// Encode the integer 'n' into the 'binaryData' slice.
-	binary.PutVarint(binaryData, int64(n))
+	// Trim any unnecessary zero bytes.
+	for i := 0; i < len(varintData); i++ {
+		if varintData[i] != 0 {
+			return varintData[i:]
+		}
+	}
 
-	// Return the resulting byte slice.
-	return binaryData
+	// If all bytes are zero, return a single zero byte.
+	return []byte{0}
 }
 
 // serializeString encodes a string into a binary representation.
@@ -325,13 +331,27 @@ func (wr *SSWriter) generateFiles(fileNames []string) error {
 // It constructs a binary representation that includes tombstone information,
 // key length, key data, value length, and value data.
 func (wr *SSWriter) serializeEntry(e Entry) []byte {
+	var data []byte
 	// Create a tombstone slice (initially all zeros)
 	tombstone := make([]byte, TOMBSTONE_SIZE)
 
 	// Determine the length of the key
 	keyLen := uint32(len(e.key))
-	keyLenBytes := make([]byte, binary.MaxVarintLen32)
+	keyLenBytes := make([]byte, KEY_SIZE_SIZE)
 	n := binary.PutUvarint(keyLenBytes, uint64(keyLen))
+
+	// Check if the key is numeric (represented as a string)
+	if _, err := strconv.Atoi(e.key); err == nil {
+		// Encode the numeric key as an integer
+		numericKey, _ := strconv.Atoi(e.key)
+		keyBytes := make([]byte, binary.MaxVarintLen64)
+		keyLen := binary.PutVarint(keyBytes, int64(numericKey))
+		data = append(tombstone, keyLenBytes[:n]...)
+		data = append(data, keyBytes[:keyLen]...)
+	} else {
+		// Encode a regular string key
+		data = append(append(tombstone, keyLenBytes[:n]...), []byte(e.key)...)
+	}
 
 	if e.tombstone {
 		// If it's a tombstone entry, set the first byte to 1
@@ -345,12 +365,10 @@ func (wr *SSWriter) serializeEntry(e Entry) []byte {
 
 	// Determine the length of the value
 	valueLen := uint32(len(e.value))
-	valueLenBytes := make([]byte, binary.MaxVarintLen32)
+	valueLenBytes := make([]byte, VALUE_SIZE_SIZE)
 	m := binary.PutUvarint(valueLenBytes, uint64(valueLen))
 
 	// Construct the serialized data
-	data := append(tombstone, keyLenBytes[:n]...)
-	data = append(data, []byte(e.key)...)
 	data = append(data, valueLenBytes[:m]...)
 	data = append(data, []byte(e.value)...)
 
@@ -547,6 +565,7 @@ func (wr *SSWriter) writeToFiles(mt Memtable, fileNames []string) error {
 
 		// Serialize the entry and write to the data file
 		serializedEntry := wr.serializeEntry(*entry)
+		fmt.Println("Serialized entry: ", serializedEntry)
 		binaryKeys = append(binaryKeys, serializedEntry)
 		_, err = files[0].Write(serializedEntry)
 		if err != nil {
@@ -670,22 +689,34 @@ func openFilesForReading(fileNames []string) ([]*os.File, error) {
 func writeToMergeAndSegments(segmentOffsetsFile, mergedFile *os.File, files []*os.File) error {
 	// Write a placeholder offset for the data segment in the segment offsets file
 	segmentOffsetsFile.WriteString("Data: 0\n")
-
 	// Copy data from the data segment file to the merged data file
 	copyFileContents(files[0], mergedFile)
-
 	// Record the current offset for the index segment in the segment offsets file
 	currentOffset, err := mergedFile.Seek(0, io.SeekEnd)
 	if err != nil {
 		return err
 	}
 	segmentOffsetsFile.WriteString(fmt.Sprint("Index: ", currentOffset, "\n"))
-
 	// Copy data from the index segment file to the merged data file
 	copyFileContents(files[1], mergedFile)
-
-	// Repeat the above steps for the summary, filter, and metadata segments
-	// ...
+	currentOffset, err = mergedFile.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+	segmentOffsetsFile.WriteString(fmt.Sprint("Summary: ", currentOffset, "\n"))
+	copyFileContents(files[2], mergedFile)
+	currentOffset, err = mergedFile.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+	segmentOffsetsFile.WriteString(fmt.Sprint("Filter: ", currentOffset, "\n"))
+	copyFileContents(files[3], mergedFile)
+	currentOffset, err = mergedFile.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+	segmentOffsetsFile.WriteString(fmt.Sprint("Metadata: ", currentOffset, "\n"))
+	copyFileContents(files[4], mergedFile)
 
 	return nil
 }
