@@ -80,13 +80,14 @@ func NewWriteAheadLog(filepath string, segmentSize int) (*WriteAheadLog, error) 
 		Buffer:         make([]byte, 0),
 		BytesRemaining: bytesRemaining,
 		Path:           filepath,
-		SegmentManager: sm.GetInstance(filepath),
+		SegmentManager: sm.GetInstance(filepath, uint64(maxIndex)),
 	}, nil
 }
 
 // creates a new segment file
 func (wal *WriteAheadLog) createNewSegment() error {
 	wal.Index++
+	wal.SegmentManager.SegmentIdx++
 	segmentName := fmt.Sprintf("wal_%05d.log", wal.Index)
 	segmentPath := filepath.Join(wal.Path, segmentName)
 
@@ -168,14 +169,14 @@ func (wal *WriteAheadLog) isRdyToDump() bool {
 }
 
 // use this method when adding a new entry to the WAL
-func (wal *WriteAheadLog) Log(key, value []byte, operation, memtableIdx int) error {
+func (wal *WriteAheadLog) Log(key, value []byte, operation int) error {
 	entry, err := NewEntry(key, value, operation)
 	if err != nil {
 		return err
 	}
 
 	wal.Buffer = append(wal.Buffer, entry.Serialize()...)
-	wal.SegmentManager.AddTableIdx(uint64(wal.Index), memtableIdx)
+	wal.SegmentManager.AddTableIdx()
 
 	if wal.isRdyToDump() {
 		err = wal.dump()
