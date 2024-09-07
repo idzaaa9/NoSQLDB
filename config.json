@@ -1,0 +1,10 @@
+{
+  "wal_segment_size": 1100,
+  "wal_folder": "data/wal/",
+  "num_tables": 4,
+  "memtable_size": 100,
+  "skip_list_max_level": 16,
+  "btree_min_degree": 16,
+  "output_dir": "data/sstable/",
+  "memtable_type": "map"
+}
