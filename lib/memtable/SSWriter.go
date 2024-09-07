@@ -1,404 +1,277 @@
 package memtable
 
 import (
-	"NoSQLDB/lib/merkle-tree"
 	"NoSQLDB/lib/pds"
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
-	"strconv"
+	"path/filepath"
 )
 
 type SSWriter struct {
 	outputDir     string
 	tableGen      int
-	isSingleFile  bool
-	isCompressed  bool
 	filter        *pds.BloomFilter
 	indexStride   int
 	summaryStride int
 }
 
-func NewSSWriter(outputDir string, tableGen, indexStride, summaryStride int, isSingleFile, isCompressed bool, filter *pds.BloomFilter) (*SSWriter, error) {
-	if isCompressed {
-		fileNameDictionary := outputDir + "/dictionary.txt"
-		fileDictionary, err := os.Create(fileNameDictionary)
-		if err != nil {
-			return nil, err
-		}
-		defer fileDictionary.Close()
-	}
+func NewSSWriter(outputDir string, tableGen, indexStride, summaryStride int, filter *pds.BloomFilter) (*SSWriter, error) {
 	return &SSWriter{
 		outputDir:     outputDir,
 		tableGen:      tableGen,
-		isSingleFile:  isSingleFile,
-		isCompressed:  isCompressed,
 		filter:        filter,
 		indexStride:   indexStride,
-		summaryStride: summaryStride * indexStride,
+		summaryStride: summaryStride,
 	}, nil
 }
 
+// Flush writes data from the Memtable to SSTable (data, index, summary, filter, and metadata).
+// It takes a Memtable as input and performs the following steps:
+// 1. Generates filenames for the required files.
+// 2. Creates and opens these files.
+// 3. Writes data, index entries, summary data, filter data, and metadata to the respective files.
+// 4. If 'isSingleFile' is true, it merges the data from different segments into a single file.
+// 5. Records segment offsets in a separate file.
+// 6. Closes all files.
+// 7. Optionally deletes the intermediate files (if 'isSingleFile' is true).
 func (wr *SSWriter) Flush(mt Memtable) error {
-	sortedKeys := mt.SortKeys()
-	binaryKeys := make([][]byte, 0)
+	// Generate filenames for data, index, summary, filter, and metadata files
+	fileNames := wr.generateFilenames()
 
+	// Create and open the necessary files
+	err := wr.generateFiles(fileNames)
+	if err != nil {
+		return err
+	}
+
+	// Write data, index entries, summary data, filter data, and metadata to the files
+	err = wr.writeToFiles(mt, fileNames)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// generateFilenames creates a set of filenames for different components of a sstable.
+// It constructs filenames based on the sstable generation number (wr.tableGen) and the output directory.
+// The generated filenames include Data, Index, Summary, Filter, and Metadata files.
+func (wr *SSWriter) generateFilenames() []string {
+	fileNames := make([]string, 0)
+
+	// Construct filenames for various components
 	fileNameData := fmt.Sprintf("usertable-%02d-Data.txt", wr.tableGen)
-	fileNameData = wr.outputDir + "/" + fileNameData
+	fileNameData = filepath.Join(wr.outputDir, fileNameData)
+
 	fileNameIndex := fmt.Sprintf("usertable-%02d-Index.txt", wr.tableGen)
-	fileNameIndex = wr.outputDir + "/" + fileNameIndex
+	fileNameIndex = filepath.Join(wr.outputDir, fileNameIndex)
+
 	fileNameSummary := fmt.Sprintf("usertable-%02d-Summary.txt", wr.tableGen)
-	fileNameSummary = wr.outputDir + "/" + fileNameSummary
+	fileNameSummary = filepath.Join(wr.outputDir, fileNameSummary)
+
 	fileNameFilter := fmt.Sprintf("usertable-%02d-Filter.txt", wr.tableGen)
-	fileNameFilter = wr.outputDir + "/" + fileNameFilter
-	fileNameMetadata := fmt.Sprintf("usertable-%02d-Metadata.txt", wr.tableGen)
-	fileNameMetadata = wr.outputDir + "/" + fileNameMetadata
+	fileNameFilter = filepath.Join(wr.outputDir, fileNameFilter)
 
-	fileData, err := os.Create(fileNameData)
+	// Add the generated filenames to the slice
+	fileNames = append(fileNames, fileNameData, fileNameIndex, fileNameSummary, fileNameFilter)
+
+	return fileNames
+}
+
+// generateFiles creates empty files with the specified names.
+// It takes a slice of filenames as input and creates each file.
+// If any error occurs during file creation, it returns that error.
+func (wr *SSWriter) generateFiles(fileNames []string) error {
+	for _, name := range fileNames {
+		// Create a new file with the given name
+		file, err := os.Create(name)
+		if err != nil {
+			return err // Return the error if file creation fails
+		}
+		file.Close() // Close the file immediately (deferred close)
+	}
+	return nil // All files created successfully
+}
+
+// serializeEntry serializes an Entry (key-value pair) into a byte slice.
+// It constructs a binary representation that includes tombstone information,
+// key length, key data, value length, and value data.
+func (wr *SSWriter) serializeEntry(e Entry) []byte {
+	var data []byte
+	// Create a tombstone slice (initially all zeros)
+	tombstone := make([]byte, TOMBSTONE_SIZE)
+	if e.tombstone {
+		tombstone[0] = 1
+	} else {
+		tombstone[0] = 0
+	}
+
+	data = tombstone
+
+	// Determine the length of the key
+	keyLen := uint32(len(e.key))
+	keyLenBytes := make([]byte, KEY_SIZE_SIZE)
+	binary.BigEndian.PutUint32(keyLenBytes, keyLen)
+
+	data = append(data, keyLenBytes...)
+
+	// Append the key
+	data = append(data, []byte(e.key)...)
+
+	if e.tombstone {
+		return data
+	}
+
+	// Determine the length of the value
+	valueLen := uint32(len(e.value))
+	valueLenBytes := make([]byte, VALUE_SIZE_SIZE)
+	binary.BigEndian.PutUint32(valueLenBytes, valueLen)
+
+	data = append(data, valueLenBytes...)
+
+	data = append(data, e.value...)
+
+	return data
+}
+
+// openFiles opens or creates a set of files with the specified names for writing.
+// It takes a slice of filenames as input and returns a slice of file pointers.
+// If any error occurs during file opening, it closes any previously opened files
+// and returns that error.
+func openFiles(fileNames []string) ([]*os.File, error) {
+	var files []*os.File
+
+	for _, fileName := range fileNames {
+		// Open or create a new file for writing
+		file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			// If opening fails, close any previously opened files and return the error
+			for _, f := range files {
+				f.Close()
+			}
+			return nil, err
+		}
+		files = append(files, file) // Add the opened file to the slice
+	}
+
+	return files, nil // All files opened successfully
+}
+
+// writeToFiles orchestrates the process of writing data, index, summary, filter, and metadata files.
+// It takes a Memtable (presumably containing key-value pairs), a slice of file names, and performs the following steps:
+// 1. Opens the necessary files (data, index, summary, filter, and metadata).
+// 2. Sorts the keys from the Memtable.
+// 3. Optionally compresses keys if 'isCompressed' is true.
+// 4. Serializes and writes each entry to the data file.
+// 5. Writes index entries and summary data at specific intervals.
+// 6. Maintains data and index offsets.
+// 7. Writes filter data to the filter file.
+// 8. Constructs and writes the serialized Merkle tree (metadata) to the metadata file.
+// 9. Closes all files when done.
+func (wr *SSWriter) writeToFiles(mt Memtable, fileNames []string) error {
+	// Open necessary files (data, index, summary, filter, metadata)
+	files, err := openFiles(fileNames)
 	if err != nil {
 		return err
 	}
-	defer fileData.Close()
 
-	fileIndex, err := os.Create(fileNameIndex)
-	if err != nil {
-		return err
-	}
-	defer fileIndex.Close()
+	// Sort keys from the Memtable
+	sortedKeys := mt.SortKeys()
 
-	fileSummary, err := os.Create(fileNameSummary)
-	if err != nil {
-		return err
-	}
-	defer fileSummary.Close()
-
-	fileFilter, err := os.Create(fileNameFilter)
-	if err != nil {
-		return err
-	}
-	defer fileFilter.Close()
-
-	fileMetadata, err := os.Create(fileNameMetadata)
-	if err != nil {
-		return err
-	}
-	defer fileMetadata.Close()
-
-	offsetData := 0
-	offsetIndex := 0
-
-	firstSerializedKey := make([]byte, 0)
-	lastSerializedKey := make([]byte, 0)
-	firstKeyOffsetIndex := 0
-	lastKeyOffsetIndex := 0
-
-	compressionCounter := 1
+	dataFile := files[0]
+	indexFile := files[1]
+	summaryFile := files[2]
+	filterFile := files[3]
 
 	for i, key := range sortedKeys {
+		// Add key to the filter
 		wr.filter.Add(key)
+
+		// Get entry from the Memtable
 		entry, err := mt.Get(key)
 		if err != nil {
 			return err
 		}
 
-		if wr.isCompressed {
-			keyNumeric, err := wr.keyTransformation(entry.key, &compressionCounter)
-			if err != nil {
-				return err
-			}
-			entry.key = strconv.Itoa(keyNumeric)
-		}
-
-		serializedEntry := entry.Serialize()
-		binaryKeys = append(binaryKeys, serializedEntry)
-
-		_, err = fileData.Write(serializedEntry)
+		// Serialize the entry and write to the data file
+		serializedEntry := wr.serializeEntry(*entry)
+		entryLen, err := dataFile.Write(serializedEntry)
 		if err != nil {
 			return err
 		}
 
-		serializedKey, err := serializeString(entry.Key())
-		if err != nil {
-			return err
-		}
+		if (i+1)%wr.indexStride == 0 {
+			keyLenBuf := make([]byte, KEY_SIZE_SIZE)
+			binary.BigEndian.PutUint32(keyLenBuf, uint32(len(key)))
+			serializedKey := []byte(key)
 
-		if i%wr.indexStride == 0 {
-			if i == wr.indexStride-1 {
-				firstSerializedKey = serializedKey
-				firstKeyOffsetIndex = offsetIndex
-			} else if i == len(sortedKeys)-1 {
-				lastSerializedKey = serializedKey
-				lastKeyOffsetIndex = offsetIndex
-			}
-
-			_, err := fileIndex.Write(append(serializedKey, intToBinary(offsetData)...))
+			dataFile.Seek(int64(entryLen)*-1, io.SeekCurrent)
+			position, err := Tell(dataFile)
 			if err != nil {
 				return err
 			}
-		}
+			positionBuf := make([]byte, 4) // size of an int
+			binary.BigEndian.PutUint32(positionBuf, uint32(position))
 
-		if i%wr.summaryStride == 0 {
-			_, err := fileSummary.Write(append(serializedKey, intToBinary(offsetIndex)...))
+			indexEntry := make([]byte, 0)
+			indexEntry = append(indexEntry, keyLenBuf...)
+			indexEntry = append(indexEntry, serializedKey...)
+			indexEntry = append(indexEntry, positionBuf...)
+
+			indexEntrySize, err := indexFile.Write(indexEntry)
 			if err != nil {
 				return err
 			}
-		}
 
-		offsetData += len(serializedEntry)
-		if i%wr.indexStride == 0 {
-			offsetIndex += len(serializedKey)
-			offsetIndex += len(intToBinary(offsetData))
-		}
-	}
+			if (i+1)%(wr.summaryStride*wr.indexStride) == 0 {
+				indexPos, err := Tell(indexFile)
+				if err != nil {
+					return err
+				}
+				indexPos -= indexEntrySize
 
-	_, err = fileSummary.Write(append(firstSerializedKey, lastSerializedKey...))
-	if err != nil {
-		return err
-	}
-	_, err = fileSummary.Write(append(intToBinary(firstKeyOffsetIndex), intToBinary(lastKeyOffsetIndex)...))
-	if err != nil {
-		return err
+				indexPosBuf := make([]byte, 4) // sizeof int
+				binary.BigEndian.PutUint32(indexPosBuf, uint32(indexPos))
+
+				summaryFile.Write(keyLenBuf)
+				summaryFile.Write(serializedKey)
+				summaryFile.Write(indexPosBuf)
+			}
+		}
 	}
 
 	serializedFilter, err := wr.filter.SerializeToBytes()
 	if err != nil {
 		return err
 	}
-	_, err = fileFilter.Write(serializedFilter)
+	filterFile.Write(serializedFilter)
+
+	// Close all files
+	err = closeFiles(files)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
-	metadata := merkle.BuildMerkleTree(binaryKeys)
-	serializedMetadata := merkle.SerializeMerkleTree(metadata)
-	_, err = fileMetadata.Write(serializedMetadata)
-	if err != nil {
-		return err
-	}
-
-	if wr.isSingleFile {
-		mergedFileName := fmt.Sprintf("usertable-%02d.txt", wr.tableGen)
-		mergedFileName = wr.outputDir + "/" + mergedFileName
-		mergedFile, err := os.Create(mergedFileName)
-		if err != nil {
-			return err
-		}
-		defer mergedFile.Close()
-
-		segmentOffsetsFileName := wr.outputDir + "/" + "segmentOffsets.txt"
-		segmentOffsetsFile, err := os.Create(segmentOffsetsFileName)
-		if err != nil {
-			return err
-		}
-		defer segmentOffsetsFile.Close()
-
-		fileData, err := os.OpenFile(fileNameData, os.O_RDWR, 0666)
-		if err != nil {
-			return err
-		}
-		defer fileData.Close()
-
-		fileIndex, err := os.OpenFile(fileNameIndex, os.O_RDWR, 0666)
-		if err != nil {
-			return err
-		}
-		defer fileIndex.Close()
-
-		fileSummary, err := os.OpenFile(fileNameSummary, os.O_RDWR, 0666)
-		if err != nil {
-			return err
-		}
-		defer fileSummary.Close()
-
-		fileFilter, err := os.OpenFile(fileNameFilter, os.O_RDWR, 0666)
-		if err != nil {
-			return err
-		}
-		defer fileFilter.Close()
-
-		fileMetadata, err := os.OpenFile(fileNameMetadata, os.O_RDWR, 0666)
-		if err != nil {
-			return err
-		}
-		defer fileMetadata.Close()
-
-		segmentOffsetsFile.WriteString("Data: 0\n")
-		copyFileContents(fileData, mergedFile)
-		currentOffset, err := mergedFile.Seek(0, io.SeekEnd)
-		if err != nil {
-			return err
-		}
-		segmentOffsetsFile.WriteString(fmt.Sprint("Index: ", currentOffset, "\n"))
-		copyFileContents(fileIndex, mergedFile)
-		currentOffset, err = mergedFile.Seek(0, io.SeekEnd)
-		if err != nil {
-			return err
-		}
-		segmentOffsetsFile.WriteString(fmt.Sprint("Summary: ", currentOffset, "\n"))
-		copyFileContents(fileSummary, mergedFile)
-		currentOffset, err = mergedFile.Seek(0, io.SeekEnd)
-		if err != nil {
-			return err
-		}
-		segmentOffsetsFile.WriteString(fmt.Sprint("Filter: ", currentOffset, "\n"))
-		copyFileContents(fileFilter, mergedFile)
-		currentOffset, err = mergedFile.Seek(0, io.SeekEnd)
-		if err != nil {
-			return err
-		}
-		segmentOffsetsFile.WriteString(fmt.Sprint("Metadata: ", currentOffset, "\n"))
-		copyFileContents(fileMetadata, mergedFile)
-
-		fileData.Close()
-		fileIndex.Close()
-		fileSummary.Close()
-		fileFilter.Close()
-		fileMetadata.Close()
-
-		err = os.Remove(fileNameData)
-		if err != nil {
-			return err
-		}
-		err = os.Remove(fileNameIndex)
-		if err != nil {
-			return err
-		}
-		err = os.Remove(fileNameSummary)
-		if err != nil {
-			return err
-		}
-		err = os.Remove(fileNameFilter)
-		if err != nil {
-			return err
-		}
-		err = os.Remove(fileNameMetadata)
-		if err != nil {
-			return err
-		}
-	}
-
+	wr.tableGen++
 	return nil
 }
 
-func intToBinary(n int) []byte {
-	binaryData := make([]byte, binary.MaxVarintLen64)
-	binary.PutVarint(binaryData, int64(n))
-	return binaryData
+func Tell(file *os.File) (int, error) {
+	pos, err := file.Seek(0, io.SeekCurrent)
+	return int(pos), err
 }
 
-func serializeString(s string) ([]byte, error) {
-	var buf bytes.Buffer
-	err := binary.Write(&buf, binary.BigEndian, uint64(len(s)))
-	if err != nil {
-		return nil, err
-	}
-	buf.WriteString(s)
-	return buf.Bytes(), nil
-}
-
-func copyFileContents(src, dst *os.File) error {
-	const bufferSize = 4096
-
-	buffer := make([]byte, bufferSize)
-	for {
-		n, err := src.Read(buffer)
+// closeFiles closes a set of open files.
+// It takes a slice of file pointers and ensures that each file is properly closed.
+// If any error occurs during file closing, it returns that error.
+func closeFiles(files []*os.File) error {
+	for _, file := range files {
+		err := file.Close()
 		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return err
-		}
-
-		_, err = dst.Write(buffer[:n])
-		if err != nil {
-			return err
+			return err // Return the error if file closing fails
 		}
 	}
-
-	return nil
-}
-
-func (wr *SSWriter) keyTransformation(key string, counter *int) (int, error) {
-	fileNameDictionary := wr.outputDir + "/dictionary.txt"
-	fileDict, err := os.OpenFile(fileNameDictionary, os.O_RDWR, 0666)
-	if err != nil {
-		return 0, err
-	}
-	defer fileDict.Close()
-
-	exists, offset, err := checkBytesInFile(fileDict, []byte(key))
-	if err != nil {
-		return 0, err
-	}
-
-	if !exists {
-		fileDict.Write(intToBinary(len([]byte(key))))
-		fileDict.Write([]byte(key))
-		fileDict.Write(intToBinary(*counter))
-		*counter++
-		return *counter - 1, nil
-	} else {
-		fileDict.Seek(offset, 0)
-		numericValue, err := readNumFromDict(fileDict)
-		if err != nil {
-			return 0, err
-		}
-		return numericValue, nil
-	}
-}
-
-func checkBytesInFile(file *os.File, targetBytes []byte) (bool, int64, error) {
-	buffer := make([]byte, len(targetBytes))
-	var position int64
-
-	for {
-		n, err := file.Read(buffer)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return false, 0, err
-		}
-
-		if n >= len(targetBytes) && bytesEqual(buffer[:len(targetBytes)], targetBytes) {
-			return true, position, nil
-		}
-
-		position += int64(n)
-	}
-
-	return false, 0, nil
-}
-
-func bytesEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func readNumFromDict(fileDict *os.File) (int, error) {
-	var keyLen uint64
-	if err := binary.Read(fileDict, binary.LittleEndian, &keyLen); err != nil {
-		return 0, err
-	}
-
-	keyBytes := make([]byte, keyLen)
-	if _, err := fileDict.Read(keyBytes); err != nil {
-		return 0, err
-	}
-
-	var numericValue int
-	if err := binary.Read(fileDict, binary.LittleEndian, &numericValue); err != nil {
-		return 0, err
-	}
-
-	return numericValue, nil
+	return nil // All files closed successfully
 }
