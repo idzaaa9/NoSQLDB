@@ -64,9 +64,13 @@ func (bf *BloomFilter) SerializeToBytes() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// DeserializeFromBytes deserializes the Bloom filter from a byte slice.
-func (bf *BloomFilter) DeserializeFromBytes(data []byte) error {
+// DeserializeFromBytes deserializes the Bloom filter from a byte slice and returns a pointer to it.
+func DeserializeFromBytes(data []byte) (*BloomFilter, error) {
+	var bf BloomFilter
 	buf := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(buf)
-	return decoder.Decode(bf)
+	if err := decoder.Decode(&bf); err != nil {
+		return nil, err
+	}
+	return &bf, nil
 }
