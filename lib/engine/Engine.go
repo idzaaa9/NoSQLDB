@@ -1,6 +1,7 @@
 package engine
 
 import (
+	cache "NoSQLDB/lib/cache"
 	cfg "NoSQLDB/lib/config"
 	mt "NoSQLDB/lib/memtable"
 	tokenbucket "NoSQLDB/lib/token-bucket"
@@ -12,6 +13,7 @@ type Engine struct {
 	WAL         *writeaheadlog.WriteAheadLog
 	Mempool     *mt.Mempool
 	TokenBucket *tokenbucket.TokenBucket
+	Cache       *cache.Cache
 }
 
 func NewEngine(config *cfg.Config) (*Engine, error) {
@@ -41,10 +43,13 @@ func NewEngine(config *cfg.Config) (*Engine, error) {
 		config.TokenBucketRate,
 		config.FillInterval)
 
+	cache := cache.NewCache(config.CacheSize)
+
 	return &Engine{
 		WAL:         wal,
 		Mempool:     mempool,
 		TokenBucket: tokenBucket,
+		Cache:       cache,
 	}, err
 }
 
@@ -72,6 +77,11 @@ func (e *Engine) Get(key string) ([]byte, error) {
 	value, err := e.Mempool.Get(key)
 
 	if err == nil {
+		return value.Value(), nil
+	}
+
+	value = e.Cache.Get(key)
+	if value != nil {
 		return value.Value(), nil
 	}
 
