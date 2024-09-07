@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"regexp"
 )
 
 const (
@@ -28,6 +29,11 @@ type Config struct {
 	BTreeMinDegree   int    `json:"btree_min_degree"`
 	OutputDir        string `json:"output_dir"`
 	MemtableType     string `json:"memtable_type"`
+
+	//Token bucket
+	TokenBucketSize int    `json:"token_bucket_size"`
+	TokenBucketRate int    `json:"token_bucket_rate"`
+	FillInterval    string `json:"fill_interval"`
 }
 
 // default values go here
@@ -42,6 +48,9 @@ var DefaultConfig = Config{
 	BTreeMinDegree:   16,
 	OutputDir:        "data/sstable/",
 	MemtableType:     "map",
+	TokenBucketSize:  100,
+	TokenBucketRate:  10,
+	FillInterval:     "500ms",
 }
 
 func LoadConfig(filepath string) (*Config, error) {
@@ -101,5 +110,32 @@ func LoadConfig(filepath string) (*Config, error) {
 		config.MemtableType = DefaultConfig.MemtableType
 	}
 
+	if config.TokenBucketSize <= 0 {
+		config.TokenBucketSize = DefaultConfig.TokenBucketSize
+	}
+
+	if config.TokenBucketRate <= 0 {
+		config.TokenBucketRate = DefaultConfig.TokenBucketRate
+	}
+
+	if !isFillIntervalValid(config.FillInterval) {
+		config.FillInterval = DefaultConfig.FillInterval
+	}
+
 	return &config, err
+}
+
+func isFillIntervalValid(duration string) bool {
+	// Regular expression to match valid duration formats
+	// This regex matches:
+	// - An optional integer part before the unit (e.g., 20)
+	// - A unit (ms, s, m, h)
+	// - Unit must be exactly one of 'ms', 's', 'm', or 'h'
+	re := `^\d+(ms|s|m|h)$`
+
+	// Compile the regular expression
+	regexp := regexp.MustCompile(re)
+
+	// Check if the duration string matches the regular expression
+	return regexp.MatchString(duration)
 }

@@ -16,7 +16,8 @@ type TokenBucket struct {
 	mu         sync.Mutex    // mutex to protect the bucket
 }
 
-func NewTokenBucket(size, rate int, limit time.Duration) *TokenBucket {
+func NewTokenBucket(size, rate int, limitString string) *TokenBucket {
+	limit, _ := time.ParseDuration(limitString)
 	return &TokenBucket{
 		size:       size,
 		tokens:     size,
