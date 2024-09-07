@@ -34,6 +34,9 @@ type Config struct {
 	TokenBucketSize int    `json:"token_bucket_size"`
 	TokenBucketRate int    `json:"token_bucket_rate"`
 	FillInterval    string `json:"fill_interval"`
+
+	//Cache
+	CacheSize int `json:"cache_size"`
 }
 
 // default values go here
@@ -51,6 +54,7 @@ var DefaultConfig = Config{
 	TokenBucketSize:  100,
 	TokenBucketRate:  10,
 	FillInterval:     "500ms",
+	CacheSize:        100,
 }
 
 func LoadConfig(filepath string) (*Config, error) {
@@ -120,6 +124,10 @@ func LoadConfig(filepath string) (*Config, error) {
 
 	if !isFillIntervalValid(config.FillInterval) {
 		config.FillInterval = DefaultConfig.FillInterval
+	}
+
+	if config.CacheSize <= 0 {
+		config.CacheSize = DefaultConfig.CacheSize
 	}
 
 	return &config, err
