@@ -25,10 +25,10 @@ func NewCache(capacity int) *Cache {
 }
 
 // Get returns the value of the key if it exists in the cache, otherwise it returns nil
-func (c *Cache) Get(key string) *Page {
+func (c *Cache) Get(key string) *memtable.Entry {
 	if entry, ok := c.items[key]; ok {
 		c.moveToHead(entry)
-		return entry
+		return entry.entry
 	}
 	return nil
 }
