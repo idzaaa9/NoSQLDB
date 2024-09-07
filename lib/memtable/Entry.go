@@ -43,3 +43,11 @@ func (e *Entry) Serialize() []byte {
 	data = append(data, valuesize...)
 	return append(data, []byte(e.value)...)
 }
+
+func NewEntry(key string, value []byte) *Entry {
+	return &Entry{
+		key:       key,
+		value:     value,
+		tombstone: false,
+	}
+}
