@@ -3,10 +3,10 @@ package memtable
 import (
 	sm "NoSQLDB/lib/segment-manager"
 	"errors"
-	"os"
 )
 
 type Mempool struct {
+	writer         SSWriter
 	tableCount      int
 	tables          []Memtable
 	activeTableIdx  int
@@ -15,7 +15,7 @@ type Mempool struct {
 }
 
 func NewMempool(
-	numTables, memtableSize, skipListMaxLevel, BTreeMinDegree int, outputDir, memtableType string) (*Mempool, error) {
+	numTables, memtableSize, skipListMaxLevel, BTreeMinDegree int, writer SSWriter, memtableType string) (*Mempool, error) {
 	memtables := make([]Memtable, numTables)
 	var err error
 	for i := 0; i < numTables; i++ {
@@ -48,6 +48,7 @@ func NewMempool(
 		}
 	}
 	return &Mempool{
+		writer:         writer,
 		tableCount:      numTables,
 		tables:          memtables,
 		activeTableIdx:  0,
@@ -71,7 +72,7 @@ func (mp *Mempool) Get(key string) (*Entry, error) {
 	return nil, errors.New("entry not found")
 }
 
-/*
+
 	func (mp *Mempool) Exists(key string) (bool, int) {
 		for i := 0; i < mp.tableCount; i++ {
 			tableIdx := (mp.activeTableIdx - i + mp.tableCount) % mp.tableCount // the addition makes sure we dont get negative numbers
@@ -84,7 +85,7 @@ func (mp *Mempool) Get(key string) (*Entry, error) {
 
 		return true
 	}
-*/
+
 func (mp *Mempool) shouldFlush() bool {
 	for i := 0; i < mp.tableCount; i++ {
 		if !mp.tables[i].IsFull() {
@@ -123,6 +124,8 @@ func (mp *Mempool) Put(key string, value []byte) error {
 	}
 
 	if mp.tables[mp.activeTableIdx].IsFull() {
+		mp.rotateForward()
+
 		err = mp.flushIfNeeded()
 		if err != nil {
 			return err
@@ -135,6 +138,7 @@ func (mp *Mempool) Put(key string, value []byte) error {
 
 	return nil
 }
+
 
 // logical delete
 func (mp *Mempool) Delete(key string) error {

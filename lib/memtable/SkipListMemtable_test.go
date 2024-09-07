@@ -69,10 +69,4 @@ func TestSkipListMemtable(t *testing.T) {
 	if got := memtable.IsFull(); got {
 		t.Errorf("IsFull() after new Put() = %v; want false", got)
 	}
-
-	// Test Flush (assumes Flush implementation is completed)
-	err = memtable.Flush()
-	if err != nil {
-		t.Fatalf("Flush() = %v; want nil", err)
-	}
 }

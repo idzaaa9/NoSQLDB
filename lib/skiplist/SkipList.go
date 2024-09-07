@@ -163,3 +163,15 @@ func (sl *SkipList) Size() int {
 	}
 	return size
 }
+
+func (sl *SkipList) GetAllNodes() []*Node {
+	var allNodes []*Node
+	current := sl.head.forward[0]
+
+	for current != nil {
+		allNodes = append(allNodes, current)
+		current = current.forward[0]
+	}
+
+	return allNodes
+}
