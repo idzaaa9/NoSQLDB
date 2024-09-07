@@ -2,8 +2,6 @@ package memtable
 
 import (
 	"NoSQLDB/lib/pds"
-	"encoding/binary"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -42,138 +40,11 @@ func (re *SSReader) Get(key string) ([]byte, error) {
 		if !isInFilter {
 			continue
 		} else {
-			summaryFileName := findFileName(fileNames, "Summary")
-			startOffsetIndex, err := CheckSummary(summaryFileName, key)
-			if err != nil {
-				return nil, err
-			}
-
-			// fmt.Println("summary ime ", summaryFileName)
-			// fmt.Println("start offset index ", startOffsetIndex)
-
-			indexFileName := findFileName(fileNames, "Index")
-			startOffsetData, err := CheckIndex(indexFileName, key, startOffsetIndex)
-			if err != nil {
-				return nil, err
-			}
-
-			// fmt.Println("index ime ", indexFileName)
-			// fmt.Println("start offset data ", startOffsetData)
-
-			dataFileName := findFileName(fileNames, "Data")
-			value, err := CheckData(dataFileName, key, startOffsetData)
-			if err != nil {
-				return nil, err
-			}
-
-			// fmt.Println("data ime ", dataFileName)
-			// fmt.Println("value ", value)
-
-			if value == nil {
-				continue
-			}
-
-			return value, nil
+			//summaryFileName := findFileName(fileNames, "Summary")
 		}
 	}
 
 	return nil, nil
-}
-
-func CheckIndex(indexFileName, key string, startOffset int) (int, error) {
-	file, err := os.Open(indexFileName)
-	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
-
-	var lowerKeyBuf []byte
-	var lowerOffsetBuf int
-
-	_, err = file.Seek(int64(startOffset), 0)
-	if err != nil {
-		return 0, err
-	}
-
-	for {
-		lowerEntry, lowerOffset, err := readSummaryIndexEntry(file)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-
-			return 0, err
-		}
-
-		lowerKeyBuf = lowerEntry
-		lowerKey := string(lowerKeyBuf)
-
-		if lowerKey >= key {
-			break
-		}
-
-		lowerOffsetBuf = lowerOffset
-	}
-
-	return lowerOffsetBuf, nil
-}
-
-func CheckData(dataFileName, keyToFind string, startOffset int) ([]byte, error) {
-	file, err := os.Open(dataFileName)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	_, err = file.Seek(int64(startOffset), 0)
-	if err != nil {
-		return nil, err
-	}
-
-	for {
-		key, value, err := readDataEntry(file)
-		if err == io.EOF {
-			return nil, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		if string(key) == keyToFind {
-			return value, nil
-		}
-
-	}
-}
-
-func CheckSummary(summaryFileName, key string) (int, error) {
-	file, err := os.Open(summaryFileName)
-	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
-
-	var lowerKeyBuf []byte
-	var lowerOffsetBuf int
-
-	for {
-		lowerEntry, lowerOffset, err := readSummaryIndexEntry(file)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return 0, err
-		}
-
-		lowerKeyBuf = lowerEntry
-		lowerKey := string(lowerKeyBuf)
-
-		if lowerKey >= key {
-			break
-		}
-
-		lowerOffsetBuf = lowerOffset
-	}
-
-	return lowerOffsetBuf, nil
 }
 
 func (re *SSReader) groupFilesByNumber() (map[int][]string, error) {
@@ -236,60 +107,4 @@ func checkFilter(filterFileName string, key string) (bool, error) {
 	}
 
 	return bloomfilter.Query(key), nil
-}
-
-func readSummaryIndexEntry(file *os.File) ([]byte, int, error) {
-	keyBuf := make([]byte, KEY_SIZE_SIZE)
-	_, err := file.Read(keyBuf)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	serializedKeyBuf := make([]byte, int32(binary.BigEndian.Uint32(keyBuf)))
-	_, err = file.Read(serializedKeyBuf)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	offsetBuf := make([]byte, 4) // sizeof int
-	_, err = file.Read(offsetBuf)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return serializedKeyBuf, int(offsetBuf[3]), nil
-}
-
-func readDataEntry(file *os.File) ([]byte, []byte, error) {
-	tombstoneBuf := make([]byte, TOMBSTONE_SIZE)
-	_, err := file.Read(tombstoneBuf)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	keyLenBuf := make([]byte, KEY_SIZE_SIZE)
-	_, err = file.Read(keyLenBuf)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	serializedKeyBuf := make([]byte, int32(binary.BigEndian.Uint32(keyLenBuf)))
-	_, err = file.Read(serializedKeyBuf)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	valueLenBuf := make([]byte, VALUE_SIZE_SIZE)
-	_, err = file.Read(valueLenBuf)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	serializedValueBuf := make([]byte, int32(binary.BigEndian.Uint32(valueLenBuf)))
-	_, err = file.Read(serializedValueBuf)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return serializedKeyBuf, serializedValueBuf, nil
 }
