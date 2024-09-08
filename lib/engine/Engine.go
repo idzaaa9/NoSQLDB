@@ -96,6 +96,7 @@ func (e *Engine) Put(key string, value []byte) error {
 	if !e.getToken() {
 		return fmt.Errorf("timed out while putting key %s", key)
 	}
+
 	err := e.WAL.Log([]byte(key), value, writeaheadlog.WAL_PUT)
 
 	if err != nil {
@@ -196,7 +197,10 @@ func (e *Engine) FillEngine(numEntries int) {
 		value := []byte(fmt.Sprintf("value-%d", i))
 
 		// Use the testPut method to add each entry without checking the token bucket
-		_ = e.testPut(key, value) // Ignoring error for simplicity
+		err := e.testPut(key, value)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

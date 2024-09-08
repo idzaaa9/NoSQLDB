@@ -137,9 +137,13 @@ func (reader *WALReader) loadHeaderFromMultipleSegments() ([]byte, error) {
 		return nil, err
 	}
 
+	bytesToRead := HEADER_SIZE - reader.BytesRemaining
+
 	reader.openNextSegment()
 
-	secondBuffer := make([]byte, HEADER_SIZE-reader.BytesRemaining)
+	fmt.Println(reader.BytesRemaining)
+
+	secondBuffer := make([]byte, bytesToRead)
 	if _, err := reader.CurrentFile.Read(secondBuffer); err != nil {
 		return nil, err
 	}

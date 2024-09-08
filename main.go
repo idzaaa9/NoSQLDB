@@ -5,7 +5,42 @@ import (
 	cfg "NoSQLDB/lib/config"
 	"NoSQLDB/lib/engine"
 	"fmt"
+	"os"
+	"path/filepath"
 )
+
+func DeleteAllFiles(dirPath string) error {
+	// Open the directory
+	dir, err := os.Open(dirPath)
+	if err != nil {
+		return fmt.Errorf("could not open directory: %w", err)
+	}
+	defer dir.Close()
+
+	// Read directory contents
+	files, err := dir.Readdir(-1)
+	if err != nil {
+		return fmt.Errorf("could not read directory contents: %w", err)
+	}
+
+	// Iterate over the files
+	for _, file := range files {
+		// Construct the full path to the file
+		fullPath := filepath.Join(dirPath, file.Name())
+
+		// Check if it's a file (not a directory)
+		if !file.IsDir() {
+			// Delete the file
+			err := os.Remove(fullPath)
+			if err != nil {
+				return fmt.Errorf("could not delete file %s: %w", fullPath, err)
+			}
+			fmt.Printf("Deleted file: %s\n", fullPath)
+		}
+	}
+
+	return nil
+}
 
 func main() {
 	config, err := cfg.LoadConfig("config.json")
@@ -13,6 +48,8 @@ func main() {
 	if err != nil {
 		config = cfg.GetDefaultConfig()
 	}
+
+	walDir := config.WALDir
 
 	engine, err := engine.NewEngine(config)
 
@@ -30,6 +67,12 @@ func main() {
 		fmt.Println("Data restored")
 		fmt.Scanln()
 	}
+	DeleteAllFiles(walDir)
+	cli.ClearConsole()
+	fmt.Println("Filling DB with test data...")
+	engine.FillEngine(500)
+	fmt.Println("DB filled with test data")
+	fmt.Scanln()
 
 	for {
 		cli.ClearConsole()
