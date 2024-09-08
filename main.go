@@ -20,6 +20,15 @@ func main() {
 		panic(err)
 	}
 
+	cli.ClearConsole()
+	fmt.Println("do you want to restore data from the log? (Y/n): ")
+	var choice byte
+	fmt.Scanln(choice)
+
+	if choice != 'n' {
+		engine.Restore(*config)
+	}
+
 	for {
 		cli.ClearConsole()
 		fmt.Println("key-value store")

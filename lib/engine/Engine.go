@@ -4,7 +4,6 @@ import (
 	cache "NoSQLDB/lib/cache"
 	cfg "NoSQLDB/lib/config"
 	mt "NoSQLDB/lib/memtable"
-	segmentmanager "NoSQLDB/lib/segment-manager"
 	tokenbucket "NoSQLDB/lib/token-bucket"
 	writeaheadlog "NoSQLDB/lib/write-ahead-log"
 	"fmt"
@@ -32,8 +31,6 @@ func NewEngine(config *cfg.Config) (*Engine, error) {
 		fmt.Println("error creating ss writer")
 		return nil, err
 	}
-
-	segmentmanager.GetInstance(config.WALDir, uint64(wal.Index))
 
 	mempool, err := mt.NewMempool(
 		config.NumTables,
@@ -64,6 +61,31 @@ func NewEngine(config *cfg.Config) (*Engine, error) {
 		Cache:       cache,
 		SSReader:    reader,
 	}, err
+}
+
+func (e Engine) Restore(cfg cfg.Config) error {
+	walreader, err := writeaheadlog.NewWALReader(
+		cfg.WALDir,
+		cfg.WALSegmentSize,
+		e.WAL.Index,
+		e.WAL.First)
+
+	if err != nil {
+		return err
+	}
+
+	walEntries, err := walreader.Recover()
+
+	if err != nil {
+		return err
+	}
+
+	for _, walEntry := range walEntries {
+		entry := mt.NewEntry(string(walEntry.Key), walEntry.Value, walEntry.Tombstone)
+		e.Mempool.Put(entry)
+	}
+
+	return nil
 }
 
 func (e Engine) getToken() bool {
