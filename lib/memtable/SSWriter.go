@@ -39,6 +39,13 @@ func NewSSWriter(outputDir string,
 }
 
 func generateTableGen(dirPath string) (int, error) {
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		err := os.Mkdir(dirPath, 0755)
+		if err != nil {
+			return -1, err
+		}
+		return 0, nil
+	}
 	maxNumber := 0
 
 	files, err := os.ReadDir(dirPath)

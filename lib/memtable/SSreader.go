@@ -132,7 +132,19 @@ func CheckData(fileName, keyToFind string, startOffset int) ([]byte, error) {
 	}
 }
 
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return info.IsDir()
+}
+
 func (re *SSReader) groupFilesByNumber() (map[int][]string, error) {
+	if !dirExists(re.dirPath) {
+		os.Mkdir(re.dirPath, 0755)
+		return nil, nil
+	}
 	groups := make(map[int][]string)
 
 	err := filepath.WalkDir(re.dirPath, func(path string, d fs.DirEntry, err error) error {
