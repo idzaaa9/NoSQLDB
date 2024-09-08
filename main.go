@@ -23,10 +23,12 @@ func main() {
 	cli.ClearConsole()
 	fmt.Println("do you want to restore data from the log? (Y/n): ")
 	var choice byte
+	fmt.Scanln(&choice)
 	fmt.Scanln(choice)
-
 	if choice != 'n' {
 		engine.Restore(*config)
+		fmt.Println("Data restored")
+		fmt.Scanln()
 	}
 
 	for {
