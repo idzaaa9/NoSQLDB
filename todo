@@ -1,0 +1,48 @@
+WRITER
+
+
+1. hendlovanje fajlova
+2. sortirati kljuceve
+3. serijalizovati entrije redom
+
+dok ima entrija; brojac i {
+	zapisi kljuc u BloomFilter
+	zapisi u ss;
+	ako i % indexProredjenost == 0 {
+		zapisi u index kljuc i offset u ss
+		ako i % summaryProredjenost {
+			zapisi u summary kljuc i offset u indexu
+		}
+	}
+	////////////////////////////////////////////////////////////////////
+	zapisi prvi i poslednji iz indexa u summary {
+		minKljuc i maxKljuc
+		minKljuc i maxKljuc, len (min), len(max)
+	}
+	izracunas merkle
+}
+
+
+-summary = index * summary
+
+
+
+READER
+
+
+1. otvoris najnoviju tabelu
+2. proveris bloom 
+2a. ako nije ides na sl tabelu
+3. proveris summary opseg da li je kljuc tu 
+4a. ako nije, ides na prvu mladju tabelu
+4b. ako jeste, proveravas vrednost kljuca
+
+
+type SSWriter struct {
+	LSMLevel     int
+	tableNumber  int
+	isSingleFile bool
+	filepath     string
+	isCompressed bool
+}
+

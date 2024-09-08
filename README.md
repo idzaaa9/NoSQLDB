@@ -2,5 +2,37 @@
 
 Data structures and algorithms project by [Ilija](https://github.com/idzaaa9) and [citvaa](https://github.com/citvaa).
 
-Uses key:value pairs where key is a string and value could be a string, or could be an array of bytes.
-Also supports working with probabilistic data structures as key:value pairs.
+Uses `key:value` pairs where key and value are strings.
+Also supports working with probabilistic data structures serialized as `key:value` pairs.
+
+## Stuff to implement
+
+The whole project should be **fully configurable**. Therefore the 
+- [x] configuration
+
+should be updated as we implement the features.
+
+- [x] config handling
+- [ ] probabilistic data structures
+  - [ ] bloom filter
+  - [ ] countMinSketch
+  - [ ] hyperLogLog
+  - [ ] simHash
+- [x] write ahead log
+- [x] memtable
+  - memtable should be implemented as a:
+  - [x] hash map
+  - [x] skip list
+  - [x] b-tree
+- [ ] SSTable
+  - [ ] data part
+  - [ ] index part
+  - [ ] summary part
+  - [ ] bloom filter
+  - [ ] metadata(merkle tree)
+- [ ] LSM-tree
+  - [ ] size-tiered compaction
+  - [ ] leveled compaction
+- [ ] Cache
+  - [ ] LRU
+- [x] Token bucket
