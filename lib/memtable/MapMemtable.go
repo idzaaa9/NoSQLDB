@@ -2,6 +2,7 @@ package memtable
 
 import (
 	"errors"
+	"sort"
 )
 
 type MapMemtable struct {
@@ -50,7 +51,12 @@ func (m *MapMemtable) IsFull() bool {
 	return m.Size() >= m.threshhold
 }
 
-// TODO: Implement this
-func (m *MapMemtable) Flush() error {
-	return nil
+// promeniti da vraca sortirane kljuceve pa onda preko Get() ih serijalizovati i zapisivati
+func (memtable *MapMemtable) SortKeys() []string {
+	var keys []string
+	for key := range memtable.data {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

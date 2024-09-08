@@ -1,21 +1,25 @@
 package memtable
 
 import (
-	sm "NoSQLDB/lib/segment-manager"
 	"errors"
-	"os"
+	"fmt"
 )
 
 type Mempool struct {
-	tableCount      int
-	tables          []Memtable
-	activeTableIdx  int
-	outputDirectory string
-	segmentManager  *sm.SegmentManager
+	tableCount     int
+	tables         []Memtable
+	activeTableIdx int
+	writer         *SSWriter
+	memtableType   string
+	minDegree      int
+	tableSize      int
+	maxLevel       int
 }
 
 func NewMempool(
-	numTables, memtableSize, skipListMaxLevel, BTreeMinDegree int, outputDir, memtableType string) (*Mempool, error) {
+	numTables, memtableSize, skipListMaxLevel, BTreeMinDegree int,
+	writer *SSWriter,
+	memtableType string) (*Mempool, error) {
 	memtables := make([]Memtable, numTables)
 	var err error
 	for i := 0; i < numTables; i++ {
@@ -30,30 +34,31 @@ func NewMempool(
 			return nil, errors.New("invalid memtable type")
 		}
 	}
-	fileInfo, err := os.Stat(outputDir)
-	if err != nil {
-		err = os.Mkdir(outputDir, 0755)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if !fileInfo.IsDir() {
-		return nil, errors.New("output path is not a directory")
+
+	return &Mempool{
+		tableCount:     numTables,
+		tables:         memtables,
+		activeTableIdx: 0,
+		writer:         writer,
+		memtableType:   memtableType,
+		minDegree:      BTreeMinDegree,
+		tableSize:      memtableSize,
+		maxLevel:       skipListMaxLevel,
+	}, err
+}
+
+func (mp *Mempool) createEmptyMemtable() (Memtable, error) {
+	switch mp.memtableType {
+	case USE_BTREE:
+		return NewBTreeMemtable(mp.minDegree, mp.tableSize), nil
+	case USE_MAP:
+		return NewMapMemtable(mp.tableSize), nil
+	case USE_SKIP_LIST:
+		return NewSkipListMemtable(mp.maxLevel, mp.tableSize), nil
+	default:
+		return nil, fmt.Errorf("invalid memtable type")
 	}
 
-	if fileInfo == nil {
-		_, err := os.Create(outputDir)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return &Mempool{
-		tableCount:      numTables,
-		tables:          memtables,
-		activeTableIdx:  0,
-		outputDirectory: outputDir,
-		segmentManager:  sm.GetInstance(outputDir, 0),
-	}, err
 }
 
 func (mp *Mempool) rotateForward() {
@@ -71,20 +76,19 @@ func (mp *Mempool) Get(key string) (*Entry, error) {
 	return nil, errors.New("entry not found")
 }
 
-/*
-	func (mp *Mempool) Exists(key string) (bool, int) {
-		for i := 0; i < mp.tableCount; i++ {
-			tableIdx := (mp.activeTableIdx - i + mp.tableCount) % mp.tableCount // the addition makes sure we dont get negative numbers
-			if mp.tables[tableIdx].Exists(key) {
-				return true, tableIdx
-			}
-		}
-		return false, -1
-	}
+// func (mp *Mempool) Exists(key string) (bool, int) {
+// 	for i := 0; i < mp.tableCount; i++ {
+// 		tableIdx := (mp.activeTableIdx - i + mp.tableCount) % mp.tableCount // the addition makes sure we dont get negative numbers
+// 		if mp.tables[tableIdx].Exists(key) {
+// 			return true, tableIdx
+// 		}
+// 	}
+// 	return false, -1
+// }
 
-		return true
-	}
-*/
+// 	return true
+// }
+
 func (mp *Mempool) shouldFlush() bool {
 	for i := 0; i < mp.tableCount; i++ {
 		if !mp.tables[i].IsFull() {
@@ -94,43 +98,38 @@ func (mp *Mempool) shouldFlush() bool {
 	return true
 }
 
-func (mp *Mempool) oldestTableIdx() int {
-	idx := mp.activeTableIdx - 1
-	if idx < 0 {
-		idx = mp.tableCount - 1
-	}
-	return idx
-}
-
-func (mp *Mempool) flushIfNeeded() error {
-	if mp.shouldFlush() {
-		err := mp.tables[mp.oldestTableIdx()].Flush()
-		if err != nil {
-			return err
+/*
+	func (mp *Mempool) flushIfNeeded() error {
+		if mp.shouldFlush() {
+			err := mp.writer.Flush(mp.tables[mp.activeTableIdx])
+			if err != nil {
+				return err
+			}
 		}
+		return nil
 	}
-	return nil
-}
+*/
 
-func (mp *Mempool) Put(key string, value []byte) error {
-	mp.segmentManager.MemtableIdx = mp.activeTableIdx
-	entry := &Entry{key, value, false}
+func (mp *Mempool) Put(entry *Entry) error {
 	err := mp.tables[mp.activeTableIdx].Put(entry.Key(), entry.Value())
-	mp.segmentManager.AddTableIdx()
 
 	if err != nil {
 		return err
 	}
 
 	if mp.tables[mp.activeTableIdx].IsFull() {
-		err = mp.flushIfNeeded()
-		if err != nil {
-			return err
-		}
-		mp.segmentManager.RemoveTableIdx(mp.oldestTableIdx())
-		mp.segmentManager.DeleteSafeSegments()
-
 		mp.rotateForward()
+
+		if mp.shouldFlush() {
+			err := mp.writer.Flush(mp.tables[mp.activeTableIdx])
+			if err != nil {
+				return nil
+			}
+			mp.tables[mp.activeTableIdx], err = mp.createEmptyMemtable()
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -138,27 +137,25 @@ func (mp *Mempool) Put(key string, value []byte) error {
 
 // logical delete
 func (mp *Mempool) Delete(key string) error {
-	mp.segmentManager.MemtableIdx = mp.activeTableIdx
-	entry := &Entry{key, nil, true}
-
-	err := mp.tables[mp.activeTableIdx].Put(entry.Key(), entry.Value())
-	mp.segmentManager.AddTableIdx()
+	err := mp.Put(&Entry{key, nil, true})
 	if err != nil {
 		return err
 	}
 
 	if mp.tables[mp.activeTableIdx].IsFull() {
-		err = mp.flushIfNeeded()
-		if err != nil {
-			return err
-		}
-
 		mp.rotateForward()
+
+		if mp.shouldFlush() {
+			err := mp.writer.Flush(mp.tables[mp.activeTableIdx])
+			if err != nil {
+				return nil
+			}
+			mp.tables[mp.activeTableIdx], err = mp.createEmptyMemtable()
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
-}
-
-func (mp *Mempool) ActiveTableIdx() int {
-	return mp.activeTableIdx
 }

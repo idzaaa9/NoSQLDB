@@ -25,6 +25,22 @@ type Node struct {
 	isLeaf   bool
 }
 
+func (n *Node) Keys() []string {
+	return n.keys
+}
+
+func (n *Node) Values() []*Entry {
+	return n.values
+}
+
+func (n *Node) Children() []*Node {
+	return n.children
+}
+
+func (n *Node) IsLeaf() bool {
+	return n.isLeaf
+}
+
 func NewNode(minDegree int, isLeaf bool) *Node {
 	return &Node{
 		keys:     make([]string, 0, 2*minDegree-1),
@@ -38,6 +54,10 @@ type BTree struct {
 	root      *Node
 	minDegree int
 	size      int
+}
+
+func (bt *BTree) Root() *Node {
+	return bt.root
 }
 
 func NewBTree(minDegree int) *BTree {

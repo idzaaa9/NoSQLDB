@@ -15,8 +15,6 @@ const (
 
 // configurable values go here
 type Config struct {
-	// BloomFilterFalsePositiveRate float32 `json:"bloom_filter_false_positive_rate"`
-	// BloomFilterExpectedElements  int     `json:"bloom_filter_expected_elements"`
 
 	// WAL
 	WALSegmentSize int    `json:"wal_segment_size"`
@@ -30,6 +28,14 @@ type Config struct {
 	OutputDir        string `json:"output_dir"`
 	MemtableType     string `json:"memtable_type"`
 
+	// SStable
+	IndexStride   int `json:"index_stride"`
+	SummaryStride int `json:"summary_stride"`
+
+	// Bloom filter
+	BFExpectedElements  int     `json:"bf_expected_elements"`
+	BFFalsePositiveRate float64 `json:"bf_false_positive_rate"`
+
 	//Token bucket
 	TokenBucketSize int    `json:"token_bucket_size"`
 	TokenBucketRate int    `json:"token_bucket_rate"`
@@ -41,20 +47,53 @@ type Config struct {
 
 // default values go here
 var DefaultConfig = Config{
-	// BloomFilterFalsePositiveRate: 0.2,
-	// BloomFilterExpectedElements:  50000,
-	WALSegmentSize:   64 * KB,
-	WALDir:           "data/wal/",
+	WALSegmentSize: 64 * KB,
+	WALDir:         "data/wal/",
+
 	NumTables:        4,
 	MemtableSize:     100,
 	SkipListMaxLevel: 16,
 	BTreeMinDegree:   16,
 	OutputDir:        "data/sstable/",
 	MemtableType:     "map",
-	TokenBucketSize:  100,
-	TokenBucketRate:  10,
-	FillInterval:     "500ms",
-	CacheSize:        100,
+
+	IndexStride:   5,
+	SummaryStride: 4,
+
+	BFExpectedElements:  100,
+	BFFalsePositiveRate: 0.2,
+
+	TokenBucketSize: 100,
+	TokenBucketRate: 10,
+	FillInterval:    "500ms",
+
+	CacheSize: 100,
+}
+
+func GetDefaultConfig() *Config {
+	return &Config{
+		WALSegmentSize: 64 * KB,
+		WALDir:         "data/wal/",
+
+		NumTables:        4,
+		MemtableSize:     100,
+		SkipListMaxLevel: 16,
+		BTreeMinDegree:   16,
+		OutputDir:        "data/sstable/",
+		MemtableType:     "map",
+
+		IndexStride:   5,
+		SummaryStride: 4,
+
+		BFExpectedElements:  100,
+		BFFalsePositiveRate: 0.2,
+
+		TokenBucketSize: 100,
+		TokenBucketRate: 10,
+		FillInterval:    "500ms",
+
+		CacheSize: 100,
+	}
 }
 
 func LoadConfig(filepath string) (*Config, error) {

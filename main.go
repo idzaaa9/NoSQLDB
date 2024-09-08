@@ -2,29 +2,16 @@ package main
 
 import (
 	"NoSQLDB/lib/cli"
-	"NoSQLDB/lib/config"
+	cfg "NoSQLDB/lib/config"
 	"NoSQLDB/lib/engine"
 	"fmt"
 )
 
-func fillDB(engine *engine.Engine) {
-	for l := 0; l < 4; l++ {
-		for i := 0; i < 100; i++ {
-			key := fmt.Sprintf("key_%d_%d", l, i)
-			value := fmt.Sprintf("value%d", i)
-			err := engine.Put(key, []byte(value))
-			if err != nil {
-				fmt.Println("Error:", err)
-			}
-		}
-	}
-}
-
 func main() {
-	config, err := config.LoadConfig("config.json")
+	config, err := cfg.LoadConfig("config.json")
 
 	if err != nil {
-		panic(err)
+		config = cfg.GetDefaultConfig()
 	}
 
 	engine, err := engine.NewEngine(config)
@@ -33,7 +20,7 @@ func main() {
 		panic(err)
 	}
 
-	for true {
+	for {
 		cli.ClearConsole()
 		fmt.Println("key-value store")
 		fmt.Println("1. Put")
@@ -57,7 +44,11 @@ func main() {
 			key := cli.GetMenu()
 			value, err := engine.Get(key)
 			if err == nil {
-				fmt.Println("Value:", string(value))
+				if string(value) == "" || value == nil {
+					fmt.Println("entry not existing or deleted")
+				} else {
+					fmt.Println("Value:", string(value))
+				}
 			} else {
 				fmt.Println("Error:", err)
 			}
@@ -70,7 +61,7 @@ func main() {
 		case 5:
 			cli.ClearConsole()
 			fmt.Println("Filling DB with test data...")
-			fillDB(engine)
+			engine.FillEngine(500)
 			fmt.Println("DB filled with test data")
 			fmt.Scanln()
 		case 6:

@@ -1,7 +1,6 @@
 package writeaheadlog
 
 import (
-	sm "NoSQLDB/lib/segment-manager"
 	"errors"
 	"fmt"
 	"os"
@@ -30,13 +29,12 @@ import (
 
 type WriteAheadLog struct {
 	CurrentFile    *os.File
-	Index          int                // last(current) wal segment
-	First          int                // first wal segment
-	SegmentSize    int                // segment size in bytes
-	Buffer         []byte             // buffer for the entries
-	BytesRemaining int                // remaining bytes in the current segment
-	Path           string             // contains path to the WAL folder
-	SegmentManager *sm.SegmentManager // manager for low watermarking
+	Index          int    // last(current) wal segment
+	First          int    // first wal segment
+	SegmentSize    int    // segment size in bytes
+	Buffer         []byte // buffer for the entries
+	BytesRemaining int    // remaining bytes in the current segment
+	Path           string // contains path to the WAL folder
 }
 
 func NewWriteAheadLog(filepath string, segmentSize int) (*WriteAheadLog, error) {
@@ -80,14 +78,12 @@ func NewWriteAheadLog(filepath string, segmentSize int) (*WriteAheadLog, error) 
 		Buffer:         make([]byte, 0),
 		BytesRemaining: bytesRemaining,
 		Path:           filepath,
-		SegmentManager: sm.GetInstance(filepath, uint64(maxIndex)),
 	}, nil
 }
 
 // creates a new segment file
 func (wal *WriteAheadLog) createNewSegment() error {
 	wal.Index++
-	wal.SegmentManager.SegmentIdx++
 	segmentName := fmt.Sprintf("wal_%05d.log", wal.Index)
 	segmentPath := filepath.Join(wal.Path, segmentName)
 
@@ -176,7 +172,6 @@ func (wal *WriteAheadLog) Log(key, value []byte, operation int) error {
 	}
 
 	wal.Buffer = append(wal.Buffer, entry.Serialize()...)
-	wal.SegmentManager.AddTableIdx()
 
 	if wal.isRdyToDump() {
 		err = wal.dump()

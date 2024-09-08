@@ -1,6 +1,9 @@
 package memtable
 
-import "NoSQLDB/lib/skiplist"
+import (
+	"NoSQLDB/lib/skiplist"
+	"sort"
+)
 
 type SkipListMemtable struct {
 	data       *skiplist.SkipList
@@ -32,11 +35,6 @@ func (slm *SkipListMemtable) Delete(key string) error {
 	return nil
 }
 
-// TODO: Implement this
-func (slm *SkipListMemtable) Flush() error {
-	return nil
-}
-
 func (slm *SkipListMemtable) Size() int {
 	return slm.data.Size()
 }
@@ -54,4 +52,17 @@ func NodeToEntry(n *skiplist.Node) *Entry {
 		value:     n.Value(),
 		tombstone: n.Tombstone(),
 	}
+}
+
+func (sm *SkipListMemtable) SortKeys() []string {
+	nodes := sm.data.GetAllNodes()
+
+	keys := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		keys = append(keys, node.Key())
+	}
+
+	sort.Strings(keys)
+
+	return keys
 }

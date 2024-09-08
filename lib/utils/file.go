@@ -11,8 +11,5 @@ func IsEmptyDir(path string) bool {
 	dir, _ := os.Open(path)
 	defer dir.Close()
 	_, err := dir.ReadDir(1)
-	if err != nil {
-		return true
-	}
-	return false
+	return err != nil
 }

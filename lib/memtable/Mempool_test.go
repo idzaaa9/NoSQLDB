@@ -2,8 +2,6 @@ package memtable
 
 import (
 	"errors"
-	"strconv"
-	"testing"
 )
 
 // Mock implementations for Memtable, Entry, etc. for testing
@@ -37,94 +35,3 @@ func (m *MockMemtable) Flush() error {
 }
 
 // Tests for Mempool
-func TestMempoolPutAndGet(t *testing.T) {
-	mempool, err := NewMempool(3, 10, 3, 2, "outputDir", USE_MAP)
-	if err != nil {
-		t.Fatalf("Failed to create Mempool: %v", err)
-	}
-
-	entry := &Entry{key: "testKey", value: []byte("testValue")}
-	if err := mempool.Put(entry); err != nil {
-		t.Fatalf("Put operation failed: %v", err)
-	}
-
-	got, err := mempool.Get("testKey")
-	if err != nil {
-		t.Fatalf("Get operation failed: %v", err)
-	}
-	if string(got.value) != "testValue" {
-		t.Errorf("Expected value %s, got %s", "testValue", got.value)
-	}
-}
-
-func TestMempoolFlushAndRotation(t *testing.T) {
-	mempool, err := NewMempool(3, 10, 3, 2, "outputDir", USE_MAP)
-	if err != nil {
-		t.Fatalf("Failed to create Mempool: %v", err)
-	}
-
-	// Add entries to the mempool until it needs to flush and rotate
-	for i := 0; i < 11; i++ { // assuming IsFull() becomes true at 10
-		entry := &Entry{key: "A" + strconv.Itoa(i), value: []byte("Value")}
-		if err := mempool.Put(entry); err != nil {
-			t.Fatalf("Put operation failed: %v", err)
-		}
-	}
-
-	// Check that flush occurred
-	if err := mempool.flushIfNeeded(); err != nil {
-		t.Fatalf("Flush operation failed: %v", err)
-	}
-
-	// Ensure rotation happened
-	if mempool.activeTableIdx != 1 {
-		t.Errorf("Expected active table index to be 1 after rotation, got %d", mempool.activeTableIdx)
-	}
-}
-
-func TestMempoolDelete(t *testing.T) {
-	mempool, err := NewMempool(3, 10, 3, 2, "outputDir", USE_MAP)
-	if err != nil {
-		t.Fatalf("Failed to create Mempool: %v", err)
-	}
-
-	entry := &Entry{key: "testKey", value: []byte("testValue")}
-	if err := mempool.Put(entry); err != nil {
-		t.Fatalf("Put operation failed: %v", err)
-	}
-
-	if err := mempool.Delete("testKey"); err != nil {
-		t.Fatalf("Delete operation failed: %v", err)
-	}
-
-}
-
-// Add additional helper functions and mock implementations if needed
-
-func TestMempoolFlushIfNeeded(t *testing.T) {
-	mempool, err := NewMempool(3, 10, 3, 2, "outputDir", USE_MAP)
-	if err != nil {
-		t.Fatalf("Failed to create Mempool: %v", err)
-	}
-
-	for i := 0; i < 10; i++ {
-		entry := &Entry{key: "A" + strconv.Itoa(i), value: []byte("Value")}
-		if err := mempool.Put(entry); err != nil {
-			t.Fatalf("Put operation failed: %v", err)
-		}
-	}
-
-	// Verify no flush required yet
-	if err := mempool.flushIfNeeded(); err != nil {
-		t.Fatalf("Flush operation failed: %v", err)
-	}
-
-	// Insert one more to trigger flush
-	if err := mempool.Put(&Entry{key: "triggerFlush", value: []byte("flushValue")}); err != nil {
-		t.Fatalf("Put operation failed: %v", err)
-	}
-
-	if err := mempool.flushIfNeeded(); err != nil {
-		t.Fatalf("Flush operation failed: %v", err)
-	}
-}

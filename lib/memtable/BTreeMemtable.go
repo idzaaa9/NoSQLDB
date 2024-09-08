@@ -1,6 +1,9 @@
 package memtable
 
-import "NoSQLDB/lib/btree"
+import (
+	"NoSQLDB/lib/btree"
+	"sort"
+)
 
 type BTreeMemtable struct {
 	data      *btree.BTree
@@ -32,11 +35,6 @@ func (btm *BTreeMemtable) Delete(key string) error {
 	return nil
 }
 
-// TODO: Implement this
-func (btm *BTreeMemtable) Flush() error {
-	return nil
-}
-
 func (btm *BTreeMemtable) Size() int {
 	return btm.data.Size()
 }
@@ -50,5 +48,29 @@ func toEntry(be *btree.Entry) *Entry {
 		key:       be.Key(),
 		value:     be.Value(),
 		tombstone: be.Tombstone(),
+	}
+}
+
+func (b *BTreeMemtable) SortKeys() []string {
+	var keys []string
+	b.collectKeysRecursive(b.data.Root(), &keys)
+	sort.Strings(keys)
+	return keys
+}
+
+func (b *BTreeMemtable) collectKeysRecursive(node *btree.Node, keys *[]string) {
+	if node == nil {
+		return
+	}
+
+	for i := 0; i < len(node.Keys()); i++ {
+		*keys = append(*keys, node.Keys()[i])
+	}
+
+	// Recursively process child nodes
+	if !node.IsLeaf() {
+		for i := 0; i < len(node.Children()); i++ {
+			b.collectKeysRecursive(node.Children()[i], keys)
+		}
 	}
 }
